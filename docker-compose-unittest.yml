@@ -29,3 +29,9 @@ services:
     container_name: core_redis
     ports:
       - "6379:6379"
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "8025:8025" # Web UI
+      - "1025:1025" # SMTP Port

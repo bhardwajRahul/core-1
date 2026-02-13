@@ -7,7 +7,6 @@ import (
 
 	"github.com/staticbackendhq/core/config"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ses"
 	"github.com/aws/aws-sdk-go-v2/service/ses/types"
@@ -24,8 +23,6 @@ func (AWSSES) Send(data SendMailData) error {
 		data.ReplyTo = data.From
 	}
 
-	charset := "UTF-8"
-
 	region := strings.TrimSpace(config.Current.S3Region)
 	cfg, err := awsconfig.LoadDefaultConfig(context.TODO(),
 		awsconfig.WithRegion(region),
@@ -37,41 +34,20 @@ func (AWSSES) Send(data SendMailData) error {
 	// Create an SES client.
 	svc := ses.NewFromConfig(cfg)
 
-	from := fmt.Sprintf("%s <%s>", data.FromName, data.From)
-
-	// Assemble the email.
-	input := &ses.SendEmailInput{
-		Destination: &types.Destination{
-			CcAddresses: []string{},
-			ToAddresses: []string{
-				data.To,
-			},
-		},
-		Message: &types.Message{
-			Body: &types.Body{
-				Html: &types.Content{
-					Charset: aws.String(charset),
-					Data:    aws.String(data.HTMLBody),
-				},
-				Text: &types.Content{
-					Charset: aws.String(charset),
-					Data:    aws.String(data.TextBody),
-				},
-			},
-			Subject: &types.Content{
-				Charset: aws.String(charset),
-				Data:    aws.String(data.Subject),
-			},
-		},
-		Source:           aws.String(from),
-		ReplyToAddresses: []string{data.ReplyTo},
-		// Uncomment to use a configuration set
-		//ConfigurationSetName: aws.String(ConfigurationSet),
+	rawEmail, err := BuildRawEmail(data)
+	if err != nil {
+		return fmt.Errorf("failed to build raw email: %w", err)
 	}
 
-	// Attempt to send the email.
-	if _, err := svc.SendEmail(context.TODO(), input); err != nil {
-		return err
+	// Send raw email (works for both emails with and without attachments)
+	input := &ses.SendRawEmailInput{
+		RawMessage: &types.RawMessage{
+			Data: rawEmail,
+		},
+	}
+
+	if _, err := svc.SendRawEmail(context.TODO(), input); err != nil {
+		return fmt.Errorf("failed to send email via SES: %w", err)
 	}
 
 	return nil
