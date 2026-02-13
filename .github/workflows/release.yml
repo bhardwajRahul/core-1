@@ -1,0 +1,61 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Build binaries
+        run: make pkg
+
+      - name: Get tag name
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Check if pre-release
+        id: prerelease
+        run: |
+          if [[ "${{ steps.tag.outputs.tag }}" == *"-"* ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Read release notes
+        id: release_notes
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          NOTES_FILE="releases/${TAG}.md"
+
+          if [ -f "$NOTES_FILE" ]; then
+            echo "notes_file=$NOTES_FILE" >> $GITHUB_OUTPUT
+          else
+            echo "notes_file=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Release ${{ steps.tag.outputs.tag }}
+          body_path: ${{ steps.release_notes.outputs.notes_file }}
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          files: |
+            dist/*.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

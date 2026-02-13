@@ -211,6 +211,8 @@ func Setup(cfg config.AppConfig) {
 	mp := cfg.MailProvider
 	if strings.EqualFold(mp, email.MailProviderSES) {
 		Emailer = email.AWSSES{}
+	} else if strings.EqualFold(mp, email.MailProviderLocal) {
+		Emailer = email.Local{}
 	} else {
 		Emailer = email.Dev{}
 	}

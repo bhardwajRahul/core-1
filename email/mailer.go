@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	MailProviderDev = "dev"
-	MailProviderSES = "ses"
+	MailProviderDev   = "dev"
+	MailProviderSES   = "ses"
+	MailProviderLocal = "local"
 )
 
 // Attachment represents an email attachment
@@ -111,7 +112,10 @@ func BuildRawEmail(data SendMailData) ([]byte, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to create text part: %w", err)
 			}
-			textPart.Write([]byte(data.TextBody))
+
+			if _, err := textPart.Write([]byte(data.TextBody)); err != nil {
+				return nil, fmt.Errorf("failed to write text part: %w", err)
+			}
 		}
 
 		// Add HTML part
@@ -123,7 +127,10 @@ func BuildRawEmail(data SendMailData) ([]byte, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to create HTML part: %w", err)
 			}
-			htmlPart.Write([]byte(data.HTMLBody))
+
+			if _, err := htmlPart.Write([]byte(data.HTMLBody)); err != nil {
+				return nil, fmt.Errorf("failed to write HTML part: %w", err)
+			}
 		}
 
 		altWriter.Close()
@@ -163,7 +170,9 @@ func BuildRawEmail(data SendMailData) ([]byte, error) {
 			if end > len(encoded) {
 				end = len(encoded)
 			}
-			attachPart.Write([]byte(encoded[i:end] + "\r\n"))
+			if _, err := attachPart.Write([]byte(encoded[i:end] + "\r\n")); err != nil {
+				return nil, fmt.Errorf("failed to write attachment part: %w", err)
+			}
 		}
 	}
 
