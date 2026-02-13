@@ -1,5 +1,5 @@
-include .env
-export $(shell sed 's/=.*//' .env)
+-include .env
+export $(shell test -f .env && sed 's/=.*//' .env)
 
 cleanup:
 	@rm -rf dev.db && rm -rf backend/dev.db
@@ -11,9 +11,11 @@ build:
 	-X github.com/staticbackendhq/core/config.CommitHash=$(shell git log --pretty=format:'%h' -n 1) \
 	-X github.com/staticbackendhq/core/config.Version=$(shell git describe --tags)" \
 	-o staticbackend
-	@cd plugins/topdf && CGO_ENABLE=0 go build -buildmode=plugin -o ../topdf.so
 
-start: build
+plugin:
+	@cd plugins/topdf && go build -buildmode=plugin -o ../topdf.so
+
+start: build plugin
 	@./cmd/staticbackend
 
 alltest:
@@ -76,6 +78,7 @@ docker: build
 	docker build . -t staticbackend:latest
 
 pkg: build
+	@mkdir -p dist
 	@rm -rf dist/*
 	@echo "building linux binaries"
 	@cd cmd && CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -o ../dist/binary-for-linux-64-bit
@@ -85,7 +88,7 @@ pkg: build
 	@cd cmd && CGO_ENABLED=0 GOARCH=arm64 GOOS=darwin go build -o ../dist/binary-for-arm-mac-64-bit
 	@echo "building windows binaries"
 	@cd cmd && CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -o ../dist/binary-for-windows-64-bit.exe
-	@echo copying plugins
-	@cp plugins/*.so dist/
+	@echo "copying plugins (if any)"
+	@cp plugins/*.so dist/ 2>/dev/null || true
 	@echo "compressing binaries"
 	@gzip dist/*
