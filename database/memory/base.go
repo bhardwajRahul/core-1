@@ -66,7 +66,7 @@ func (m *Memory) ListDocuments(auth model.Auth, dbName, col string, params model
 	}
 
 	start := (params.Page - 1) * params.Size
-	end := start + params.Size - 1
+	end := start + params.Size
 
 	if l := int64(len(list)); end > l {
 		end = l
@@ -94,7 +94,7 @@ func (m *Memory) QueryDocuments(auth model.Auth, dbName, col string, filter map[
 	filtered := filterByClauses(list, filter)
 
 	start := (params.Page - 1) * params.Size
-	end := start + params.Size - 1
+	end := start + params.Size
 
 	if l := int64(len(filtered)); end > l {
 		end = l
