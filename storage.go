@@ -8,7 +8,7 @@ import (
 )
 
 func upload(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err := r.ParseMultipartForm(64 << 20); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -27,7 +27,8 @@ func upload(w http.ResponseWriter, r *http.Request) {
 
 	// check for file size
 	// TODO: This should be based on current plan
-	if h.Size/(1000*1000) > 150 {
+	maxFileSizeMB := int64(350)
+	if h.Size/(1024*1024) > maxFileSizeMB {
 		http.Error(w, "file size exeeded your limit", http.StatusBadRequest)
 		return
 	}
