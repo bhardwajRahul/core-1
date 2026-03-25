@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"mime/multipart"
+	"mime/quotedprintable"
 	"net/textproto"
 	"strings"
 	"time"
@@ -113,9 +114,11 @@ func BuildRawEmail(data SendMailData) ([]byte, error) {
 				return nil, fmt.Errorf("failed to create text part: %w", err)
 			}
 
-			if _, err := textPart.Write([]byte(data.TextBody)); err != nil {
+			qpText := quotedprintable.NewWriter(textPart)
+			if _, err := qpText.Write([]byte(data.TextBody)); err != nil {
 				return nil, fmt.Errorf("failed to write text part: %w", err)
 			}
+			qpText.Close()
 		}
 
 		// Add HTML part
@@ -128,9 +131,11 @@ func BuildRawEmail(data SendMailData) ([]byte, error) {
 				return nil, fmt.Errorf("failed to create HTML part: %w", err)
 			}
 
-			if _, err := htmlPart.Write([]byte(data.HTMLBody)); err != nil {
+			qpHTML := quotedprintable.NewWriter(htmlPart)
+			if _, err := qpHTML.Write([]byte(data.HTMLBody)); err != nil {
 				return nil, fmt.Errorf("failed to write HTML part: %w", err)
 			}
+			qpHTML.Close()
 		}
 
 		altWriter.Close()
