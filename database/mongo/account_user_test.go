@@ -8,9 +8,14 @@ import (
 )
 
 func TestAddAccountUser(t *testing.T) {
+	acctID, err := datastore.CreateAccount(confDBName, "au-add@test.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	au := model.AccountUser{
 		UserID:    adminToken.ID,
-		AccountID: "other-account-id",
+		AccountID: acctID,
 		Email:     adminEmail,
 		Role:      0,
 		Token:     "assoc-token-1",
@@ -26,9 +31,14 @@ func TestAddAccountUser(t *testing.T) {
 }
 
 func TestGetAccountUser(t *testing.T) {
+	acctID, err := datastore.CreateAccount(confDBName, "au-get@test.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	au := model.AccountUser{
 		UserID:    adminToken.ID,
-		AccountID: "get-account-id",
+		AccountID: acctID,
 		Email:     adminEmail,
 		Role:      0,
 		Token:     "assoc-token-get",
@@ -40,7 +50,7 @@ func TestGetAccountUser(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	found, err := datastore.GetAccountUser(confDBName, adminToken.ID, "get-account-id")
+	found, err := datastore.GetAccountUser(confDBName, adminToken.ID, acctID)
 	if err != nil {
 		t.Fatal(err)
 	} else if found.ID != id {
@@ -49,10 +59,15 @@ func TestGetAccountUser(t *testing.T) {
 }
 
 func TestFindAccountUserByToken(t *testing.T) {
+	acctID, err := datastore.CreateAccount(confDBName, "au-findbytoken@test.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	const tok = "assoc-token-findbytoken"
 	au := model.AccountUser{
 		UserID:    adminToken.ID,
-		AccountID: "find-by-token-account",
+		AccountID: acctID,
 		Email:     adminEmail,
 		Role:      0,
 		Token:     tok,
@@ -73,28 +88,35 @@ func TestFindAccountUserByToken(t *testing.T) {
 }
 
 func TestListAccountUsers(t *testing.T) {
-	const listUserID = "list-acct-user-id"
-	au1 := model.AccountUser{
-		UserID:    listUserID,
-		AccountID: "list-account-1",
-		Email:     "list@test.com",
+	listUserID, err := datastore.CreateUser(confDBName, model.User{
+		AccountID: adminAccount.ID,
+		Email:     "au-listuser@test.com",
+		Password:  "pw",
+		Token:     "au-listuser-token",
 		Role:      0,
-		Token:     "list-tok-1",
 		Created:   time.Now(),
-	}
-	au2 := model.AccountUser{
-		UserID:    listUserID,
-		AccountID: "list-account-2",
-		Email:     "list@test.com",
-		Role:      0,
-		Token:     "list-tok-2",
-		Created:   time.Now(),
-	}
-
-	if _, err := datastore.AddAccountUser(confDBName, au1); err != nil {
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := datastore.AddAccountUser(confDBName, au2); err != nil {
+
+	acct1, err := datastore.CreateAccount(confDBName, "au-list1@test.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acct2, err := datastore.CreateAccount(confDBName, "au-list2@test.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := datastore.AddAccountUser(confDBName, model.AccountUser{
+		UserID: listUserID, AccountID: acct1, Email: "au-listuser@test.com", Token: "list-tok-1", Created: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := datastore.AddAccountUser(confDBName, model.AccountUser{
+		UserID: listUserID, AccountID: acct2, Email: "au-listuser@test.com", Token: "list-tok-2", Created: time.Now(),
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -107,9 +129,14 @@ func TestListAccountUsers(t *testing.T) {
 }
 
 func TestDeleteAccountUser(t *testing.T) {
+	acctID, err := datastore.CreateAccount(confDBName, "au-del@test.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	au := model.AccountUser{
 		UserID:    adminToken.ID,
-		AccountID: "delete-account-id",
+		AccountID: acctID,
 		Email:     adminEmail,
 		Role:      0,
 		Token:     "assoc-token-del",
@@ -125,13 +152,13 @@ func TestDeleteAccountUser(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := datastore.GetAccountUser(confDBName, adminToken.ID, "delete-account-id"); err == nil {
+	if _, err := datastore.GetAccountUser(confDBName, adminToken.ID, acctID); err == nil {
 		t.Error("expected error after deletion, got nil")
 	}
 }
 
 func TestUpdateUserAccount(t *testing.T) {
-	newAcctID, err := datastore.CreateAccount(confDBName, "promote@test.com")
+	newAcctID, err := datastore.CreateAccount(confDBName, "au-promote@test.com")
 	if err != nil {
 		t.Fatal(err)
 	}
