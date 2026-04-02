@@ -1,6 +1,7 @@
 package mongo
 
 import (
+	"log"
 	"time"
 
 	"github.com/staticbackendhq/core/model"
@@ -54,7 +55,7 @@ func fromLocalAccountUser(lau LocalAccountUser) model.AccountUser {
 
 func (mg *Mongo) ensureAccountUserIndexes(db *mongo.Database) {
 	col := db.Collection("sb_account_users")
-	col.Indexes().CreateMany(mg.Ctx, []mongo.IndexModel{
+	if _, err := col.Indexes().CreateMany(mg.Ctx, []mongo.IndexModel{
 		{
 			Keys:    bson.D{{Key: "token", Value: 1}},
 			Options: options.Index().SetUnique(true),
@@ -63,7 +64,9 @@ func (mg *Mongo) ensureAccountUserIndexes(db *mongo.Database) {
 			Keys:    bson.D{{Key: "userId", Value: 1}, {Key: "accountId", Value: 1}},
 			Options: options.Index().SetUnique(true),
 		},
-	})
+	}); err != nil {
+		log.Println("ensureAccountUserIndexes error:", err)
+	}
 }
 
 func (mg *Mongo) AddAccountUser(dbName string, au model.AccountUser) (id string, err error) {
