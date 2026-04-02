@@ -120,6 +120,15 @@ func (pg *PostgreSQL) ResetPassword(dbName, email, code, password string) error 
 	return nil
 }
 
+func (pg *PostgreSQL) UpdateUserAccount(dbName, userID, newAccountID string) error {
+	qry := fmt.Sprintf(`
+		UPDATE %s.sb_tokens SET account_id = $2 WHERE id = $1;
+	`, dbName)
+
+	_, err := pg.DB.Exec(qry, userID, newAccountID)
+	return err
+}
+
 func (pg *PostgreSQL) RemoveUser(auth model.Auth, dbName, userID string) error {
 	qry := fmt.Sprintf(`
 	DELETE FROM %s.sb_tokens

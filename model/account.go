@@ -56,8 +56,22 @@ type User struct {
 }
 
 type Login struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+	AccountID string `json:"accountId,omitempty"`
+}
+
+// AccountUser represents a cross-account membership for a user.
+// The user's canonical identity lives in sb_tokens; this table
+// stores additional account associations, each with its own auth token.
+type AccountUser struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"userId"`
+	AccountID string    `json:"accountId"`
+	Email     string    `json:"email"`
+	Role      int       `json:"role"`
+	Token     string    `json:"token"`
+	Created   time.Time `json:"created"`
 }
 
 const (

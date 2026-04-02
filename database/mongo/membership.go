@@ -134,6 +134,24 @@ func (mg *Mongo) GetFirstUserFromAccountID(dbName, accountID string) (tok model.
 	return
 }
 
+func (mg *Mongo) UpdateUserAccount(dbName, userID, newAccountID string) error {
+	db := mg.Client.Database(dbName)
+
+	uid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return err
+	}
+	aid, err := primitive.ObjectIDFromHex(newAccountID)
+	if err != nil {
+		return err
+	}
+
+	filter := bson.M{FieldID: uid}
+	update := bson.M{"$set": bson.M{FieldAccountID: aid}}
+	_, err = db.Collection("sb_tokens").UpdateOne(mg.Ctx, filter, update)
+	return err
+}
+
 func (mg *Mongo) RemoveUser(auth model.Auth, dbName, userID string) error {
 	db := mg.Client.Database(dbName)
 

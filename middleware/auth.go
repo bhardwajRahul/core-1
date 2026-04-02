@@ -91,15 +91,12 @@ func ValidateAuthKey(datastore database.Persister, volatile cache.Volatilizer, c
 		return auth, nil
 	}
 
-	parts := strings.Split(key, "|")
+	// pl.Token format is "{userID}|{token}"
+	parts := strings.Split(pl.Token, "|")
 	if len(parts) != 2 {
 		return a, fmt.Errorf("invalid authentication token")
 	}
-
-	token, err := datastore.FindUser(conf.Name, parts[0], parts[1])
-	if err != nil {
-		return a, fmt.Errorf("error retrieving your token: %s", err.Error())
-	}
+	userID, rawToken := parts[0], parts[1]
 
 	// TODO: This was datastore.FindAccount(token.AccountID) before the
 	// backend refactor, this is very strange and should not have worked.....
@@ -111,12 +108,39 @@ func ValidateAuthKey(datastore database.Persister, volatile cache.Volatilizer, c
 		return a, fmt.Errorf("error retrieving your customer account: %v", err)
 	}
 
+	tok, err := datastore.FindUser(conf.Name, userID, rawToken)
+	if err != nil {
+		// token not in sb_tokens — check cross-account associations
+		assoc, err2 := datastore.FindAccountUserByToken(conf.Name, rawToken)
+		if err2 != nil {
+			return a, fmt.Errorf("error retrieving your token: %s", err.Error())
+		} else if assoc.UserID != userID {
+			return a, fmt.Errorf("invalid user id in token")
+		}
+
+		a = model.Auth{
+			AccountID: assoc.AccountID,
+			UserID:    assoc.UserID,
+			Email:     assoc.Email,
+			Role:      assoc.Role,
+			Token:     assoc.Token,
+			Plan:      cus.Plan,
+		}
+		if err := volatile.SetTyped(pl.Token, a); err != nil {
+			return a, err
+		}
+		if err := volatile.SetTyped("base:"+pl.Token, conf); err != nil {
+			return a, err
+		}
+		return a, nil
+	}
+
 	a = model.Auth{
-		AccountID: token.AccountID,
-		UserID:    token.ID,
-		Email:     token.Email,
-		Role:      token.Role,
-		Token:     token.Token,
+		AccountID: tok.AccountID,
+		UserID:    tok.ID,
+		Email:     tok.Email,
+		Role:      tok.Role,
+		Token:     tok.Token,
 		Plan:      cus.Plan,
 	}
 	if err := volatile.SetTyped(pl.Token, a); err != nil {

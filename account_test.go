@@ -1,6 +1,8 @@
 package staticbackend
 
 import (
+	"encoding/json"
+	"net/http"
 	"testing"
 	"time"
 
@@ -72,5 +74,110 @@ func TestAddNewDatabase(t *testing.T) {
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
+	}
+}
+
+func TestListAssociations(t *testing.T) {
+	resp := dbReq(t, acct.listAssociations, "GET", "/account/associations", nil)
+	defer resp.Body.Close()
+
+	if resp.StatusCode > 299 {
+		t.Fatal(GetResponseBody(t, resp))
+	}
+
+	// result may be nil/null when there are no associations — that is valid
+	var result []model.AccountUser
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatal("decoding response:", err)
+	}
+}
+
+func TestGetUserAccounts(t *testing.T) {
+	resp := dbReq(t, acct.getUserAccounts, "GET", "/account/user-accounts?email="+admEmail, nil, true)
+	defer resp.Body.Close()
+
+	if resp.StatusCode > 299 {
+		t.Fatal(GetResponseBody(t, resp))
+	}
+
+	type accountEntry struct {
+		AccountID string `json:"accountId"`
+		Role      int    `json:"role"`
+		Home      bool   `json:"home"`
+	}
+	var result []accountEntry
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatal("decoding response:", err)
+	}
+	if len(result) == 0 {
+		t.Error("expected at least the home account entry")
+	}
+
+	found := false
+	for _, entry := range result {
+		if entry.Home {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected one entry with home=true")
+	}
+}
+
+func TestGetUserAccountsMissingEmail(t *testing.T) {
+	resp := dbReq(t, acct.getUserAccounts, "GET", "/account/user-accounts", nil, true)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 got %d", resp.StatusCode)
+	}
+}
+
+func TestCrossAccountUserAssociation(t *testing.T) {
+	// Create a user that lives in a *different* account so that addUser
+	// triggers the cross-account association path instead of the
+	// "email already in use in this account" rejection.
+	const crossEmail = "cross-account-user@test.com"
+
+	otherAcctID, err := backend.DB.CreateAccount(dbName, "cross-owner@test.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := backend.DB.CreateUser(dbName, model.User{
+		AccountID: otherAcctID,
+		Email:     crossEmail,
+		Password:  "doesnotmatter",
+		Token:     backend.DB.NewID(),
+		Role:      0,
+		Created:   time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// addUser as the admin (testAccountID) with an email from a different account
+	// should create a cross-account association, not a new user record
+	resp := dbReq(t, acct.addUser, "POST", "/account/users", model.Login{Email: crossEmail})
+	defer resp.Body.Close()
+
+	if resp.StatusCode > 299 {
+		t.Fatal(GetResponseBody(t, resp))
+	}
+
+	var assoc model.AccountUser
+	if err := json.NewDecoder(resp.Body).Decode(&assoc); err != nil {
+		t.Fatal("decoding response:", err)
+	}
+	if len(assoc.Token) == 0 {
+		t.Error("expected a non-empty association token")
+	}
+	if assoc.Email != crossEmail {
+		t.Errorf("expected email %s got %s", crossEmail, assoc.Email)
+	}
+
+	// clean up
+	if err := backend.DB.DeleteAccountUser(dbName, assoc.ID); err != nil {
+		t.Fatal("cleanup failed:", err)
 	}
 }

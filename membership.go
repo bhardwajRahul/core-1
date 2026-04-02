@@ -56,7 +56,7 @@ func (m *membership) login(w http.ResponseWriter, r *http.Request) {
 
 	mship := backend.Membership(conf)
 
-	token, err := mship.Authenticate(l.Email, l.Password)
+	token, err := mship.Authenticate(l.Email, l.Password, l.AccountID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -80,7 +80,7 @@ func (m *membership) register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mship := backend.Membership(conf)
-	token, err := mship.Register(l.Email, l.Password)
+	token, err := mship.Register(l.Email, l.Password, l.AccountID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

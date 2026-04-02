@@ -438,11 +438,49 @@ func (a *accounts) addUser(w http.ResponseWriter, r *http.Request) {
 
 		data.Email = strings.ToLower(data.Email)
 
-		if exists, err := backend.DB.UserEmailExists(conf.Name, data.Email); err != nil {
+		exists, err := backend.DB.UserEmailExists(conf.Name, data.Email)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
-		} else if exists {
-			http.Error(w, "email already in use", http.StatusBadRequest)
+		}
+
+		if exists {
+			// email already registered — create a cross-account association instead
+			existingUser, err := backend.DB.FindUserByEmail(conf.Name, data.Email)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			if existingUser.AccountID == auth.AccountID {
+				http.Error(w, "email already in use in this account", http.StatusBadRequest)
+				return
+			}
+
+			if _, err := backend.DB.GetAccountUser(conf.Name, existingUser.ID, auth.AccountID); err == nil {
+				http.Error(w, "user already associated with this account", http.StatusBadRequest)
+				return
+			}
+
+			assoc := model.AccountUser{
+				UserID:    existingUser.ID,
+				AccountID: auth.AccountID,
+				Email:     existingUser.Email,
+				Role:      0,
+				Token:     backend.DB.NewID(),
+			}
+			if _, err := backend.DB.AddAccountUser(conf.Name, assoc); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			respond(w, http.StatusOK, model.User{
+				ID:        assoc.UserID,
+				AccountID: assoc.AccountID,
+				Email:     assoc.Email,
+				Role:      assoc.Role,
+				Token:     assoc.Token,
+			})
 			return
 		}
 
@@ -466,6 +504,10 @@ func (a *accounts) addUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *accounts) deleteUser(w http.ResponseWriter, r *http.Request) {
+	//TODO: We need to think about other account association
+	// like if there's one other association, it might swap the
+	// account id.
+
 	conf, auth, err := middleware.Extract(r, true)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -491,4 +533,87 @@ func (a *accounts) deleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respond(w, http.StatusOK, true)
+}
+
+// listAssociations returns all cross-account memberships for the authenticated user.
+func (a *accounts) listAssociations(w http.ResponseWriter, r *http.Request) {
+	conf, auth, err := middleware.Extract(r, true)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	associations, err := backend.DB.ListAccountUsers(conf.Name, auth.UserID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	respond(w, http.StatusOK, associations)
+}
+
+// promoteUser promotes the authenticated user to have their own home account,
+// preserving their existing membership as a cross-account association.
+func (a *accounts) promoteUser(w http.ResponseWriter, r *http.Request) {
+	conf, auth, err := middleware.Extract(r, true)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	mship := backend.Membership(conf)
+	token, err := mship.PromoteToOwnAccount(auth)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	respond(w, http.StatusOK, token)
+}
+
+// getUserAccounts returns all account IDs (home + associations) for a given email.
+// Root access required.
+func (a *accounts) getUserAccounts(w http.ResponseWriter, r *http.Request) {
+	conf, _, err := middleware.Extract(r, false)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	email := strings.ToLower(r.URL.Query().Get("email"))
+	if len(email) == 0 {
+		http.Error(w, "email query parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	user, err := backend.DB.FindUserByEmail(conf.Name, email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	associations, err := backend.DB.ListAccountUsers(conf.Name, user.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	type accountEntry struct {
+		AccountID string `json:"accountId"`
+		Role      int    `json:"role"`
+		Home      bool   `json:"home"`
+	}
+
+	result := []accountEntry{
+		{AccountID: user.AccountID, Role: user.Role, Home: true},
+	}
+	for _, assoc := range associations {
+		result = append(result, accountEntry{
+			AccountID: assoc.AccountID,
+			Role:      assoc.Role,
+			Home:      false,
+		})
+	}
+
+	respond(w, http.StatusOK, result)
 }

@@ -86,6 +86,20 @@ type Persister interface {
 	// RemoveUser permanently removes a user from an account
 	RemoveUser(auth model.Auth, dbName, userID string) error
 
+	// cross-account user association functions
+	// AddAccountUser creates a cross-account membership for a user
+	AddAccountUser(dbName string, au model.AccountUser) (id string, err error)
+	// GetAccountUser returns an existing association by user and account
+	GetAccountUser(dbName, userID, accountID string) (model.AccountUser, error)
+	// FindAccountUserByToken looks up an association by its auth token
+	FindAccountUserByToken(dbName, token string) (model.AccountUser, error)
+	// ListAccountUsers returns all account associations for a user
+	ListAccountUsers(dbName, userID string) ([]model.AccountUser, error)
+	// DeleteAccountUser removes a cross-account association
+	DeleteAccountUser(dbName, id string) error
+	// UpdateUserAccount changes the home account of a user (used by PromoteToOwnAccount)
+	UpdateUserAccount(dbName, userID, newAccountID string) error
+
 	// base CRUD
 	// CreateDocument creates a record in a collection
 	CreateDocument(auth model.Auth, dbName, col string, doc map[string]interface{}) (map[string]interface{}, error)

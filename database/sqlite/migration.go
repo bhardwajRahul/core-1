@@ -96,6 +96,52 @@ func ensureVersion(db *sql.DB) error {
 		if err := up(db, prefix, i); err != nil {
 			return err
 		}
+		// version 3 adds sb_account_users per app — SQLite has no dynamic SQL
+		// so we iterate apps in Go after the marker file is applied
+		if i == 3 {
+			if err := migrateAddAccountUsers(db); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func migrateAddAccountUsers(db *sql.DB) error {
+	rows, err := db.Query(`SELECT name FROM sb_apps`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, name := range names {
+		ddl := strings.Replace(`
+			CREATE TABLE IF NOT EXISTS {schema}_sb_account_users (
+				id         TEXT PRIMARY KEY,
+				user_id    TEXT NOT NULL REFERENCES {schema}_sb_tokens(id)   ON DELETE CASCADE,
+				account_id TEXT NOT NULL REFERENCES {schema}_sb_accounts(id) ON DELETE CASCADE,
+				email      TEXT NOT NULL,
+				role       INTEGER NOT NULL DEFAULT 0,
+				token      TEXT NOT NULL UNIQUE,
+				created    TIMESTAMP NOT NULL,
+				UNIQUE(user_id, account_id)
+			);
+		`, "{schema}", name, -1)
+		if _, err := db.Exec(ddl); err != nil {
+			return err
+		}
 	}
 	return nil
 }

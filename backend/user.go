@@ -23,8 +23,10 @@ func newUser(base model.DatabaseConfig) User {
 	return User{conf: base}
 }
 
-// Authenticate tries to authenticate an email/password and return a session token
-func (u User) Authenticate(email, password string) (string, error) {
+// Authenticate tries to authenticate an email/password and return a session token.
+// An optional accountID can be provided to log into a cross-account association
+// instead of the user's home account.
+func (u User) Authenticate(email, password string, accountID ...string) (string, error) {
 	email = strings.ToLower(email)
 
 	tok, err := DB.FindUserByEmail(u.conf.Name, email)
@@ -36,14 +38,48 @@ func (u User) Authenticate(email, password string) (string, error) {
 		return "", errors.New("invalid email/password")
 	}
 
+	var auth model.Auth
+
+	// if an accountID is provided and differs from the home account, look up the association
+	if len(accountID) > 0 && accountID[0] != "" && accountID[0] != tok.AccountID {
+		assoc, err := DB.GetAccountUser(u.conf.Name, tok.ID, accountID[0])
+		if err != nil {
+			return "", errors.New("invalid email/password")
+		}
+
+		token := fmt.Sprintf("%s|%s", tok.ID, assoc.Token)
+
+		jwtBytes, err := GetJWT(token)
+		if err != nil {
+			return "", err
+		}
+
+		auth = model.Auth{
+			AccountID: assoc.AccountID,
+			UserID:    tok.ID,
+			Email:     assoc.Email,
+			Role:      assoc.Role,
+			Token:     assoc.Token,
+		}
+
+		if err = Cache.SetTyped(token, auth); err != nil {
+			return "", err
+		}
+		if err = Cache.SetTyped("base:"+token, u.conf); err != nil {
+			return "", err
+		}
+
+		return string(jwtBytes), nil
+	}
+
 	token := fmt.Sprintf("%s|%s", tok.ID, tok.Token)
 
-	jwt, err := GetJWT(token)
+	jwtBytes, err := GetJWT(token)
 	if err != nil {
 		return "", err
 	}
 
-	auth := model.Auth{
+	auth = model.Auth{
 		AccountID: tok.AccountID,
 		UserID:    tok.ID,
 		Email:     tok.Email,
@@ -60,21 +96,79 @@ func (u User) Authenticate(email, password string) (string, error) {
 		return "", err
 	}
 
-	return string(jwt), nil
+	return string(jwtBytes), nil
 }
 
-// Register creates a new account and user
-func (u User) Register(email, password string) (string, error) {
+// Register creates a new account and user.
+// An optional accountID can be provided when the email already exists in the schema
+// but the user wants to join an additional account. In that case the password is
+// verified against the existing record and a cross-account association is created.
+func (u User) Register(email, password string, accountID ...string) (string, error) {
 	email = strings.ToLower(email)
 
 	exists, err := DB.UserEmailExists(u.conf.Name, email)
 	if err != nil {
 		return "", err
-	} else if exists {
-		return "", errors.New("invalid email")
 	}
 
-	// account creator have the role=50 (Account Admin)
+	if exists {
+		// only allowed when an explicit accountID is supplied
+		if len(accountID) == 0 || accountID[0] == "" {
+			return "", errors.New("invalid email")
+		}
+
+		// verify credentials against the existing record
+		tok, err := DB.FindUserByEmail(u.conf.Name, email)
+		if err != nil {
+			return "", err
+		}
+		if err = bcrypt.CompareHashAndPassword([]byte(tok.Password), []byte(password)); err != nil {
+			return "", errors.New("invalid email/password")
+		}
+
+		// refuse if already associated with this account
+		if tok.AccountID == accountID[0] {
+			return "", errors.New("already a member of this account")
+		}
+		if _, err := DB.GetAccountUser(u.conf.Name, tok.ID, accountID[0]); err == nil {
+			return "", errors.New("already a member of this account")
+		}
+
+		assoc := model.AccountUser{
+			UserID:    tok.ID,
+			AccountID: accountID[0],
+			Email:     tok.Email,
+			Role:      0,
+			Token:     DB.NewID(),
+		}
+		if _, err := DB.AddAccountUser(u.conf.Name, assoc); err != nil {
+			return "", err
+		}
+
+		token := fmt.Sprintf("%s|%s", tok.ID, assoc.Token)
+		jwtBytes, err := GetJWT(token)
+		if err != nil {
+			return "", err
+		}
+
+		auth := model.Auth{
+			AccountID: assoc.AccountID,
+			UserID:    tok.ID,
+			Email:     assoc.Email,
+			Role:      assoc.Role,
+			Token:     assoc.Token,
+		}
+		if err := Cache.SetTyped(token, auth); err != nil {
+			return "", err
+		}
+		if err := Cache.SetTyped("base:"+token, u.conf); err != nil {
+			return "", err
+		}
+
+		return string(jwtBytes), nil
+	}
+
+	// account creator has role=50 (Account Admin)
 	jwtBytes, tok, err := u.CreateAccountAndUser(email, password, 50)
 	if err != nil {
 		return "", err
@@ -240,6 +334,58 @@ func (u User) GetAuthToken(tok model.User) (jwtBytes []byte, err error) {
 	}
 
 	return
+}
+
+// PromoteToOwnAccount moves a user from being a member of someone else's account
+// to having their own home account, while preserving the old membership as an
+// association in sb_account_users.
+func (u User) PromoteToOwnAccount(auth model.Auth) (string, error) {
+	// get the user's current record to capture their role in the old account
+	currentUser, err := DB.GetFirstUserFromAccountID(u.conf.Name, auth.AccountID)
+	if err != nil {
+		return "", err
+	}
+
+	// create the user's own account
+	newAcctID, err := DB.CreateAccount(u.conf.Name, auth.Email)
+	if err != nil {
+		return "", err
+	}
+
+	// preserve the old membership as an association
+	assoc := model.AccountUser{
+		UserID:    auth.UserID,
+		AccountID: auth.AccountID,
+		Email:     auth.Email,
+		Role:      currentUser.Role,
+		Token:     DB.NewID(),
+	}
+	if _, err := DB.AddAccountUser(u.conf.Name, assoc); err != nil {
+		return "", err
+	}
+
+	// move the user's home account
+	if err := DB.UpdateUserAccount(u.conf.Name, auth.UserID, newAcctID); err != nil {
+		return "", err
+	}
+
+	// the old cached token will expire at its natural 12h TTL;
+	// the caller should treat the returned JWT as the new session token
+
+	// build and cache a fresh token for the new home account
+	updatedUser := model.User{
+		ID:        auth.UserID,
+		AccountID: newAcctID,
+		Email:     auth.Email,
+		Role:      currentUser.Role,
+		Token:     currentUser.Token,
+	}
+	jwtBytes, err := u.GetAuthToken(updatedUser)
+	if err != nil {
+		return "", err
+	}
+
+	return string(jwtBytes), nil
 }
 
 // GetJWT returns a session token from a token

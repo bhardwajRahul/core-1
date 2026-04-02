@@ -117,6 +117,17 @@ func (sl *SQLite) createSystemTables(schema string) error {
 			interval TEXT NOT NULL,
 			last_run timestamp NOT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS {schema}_sb_account_users (
+			id         TEXT PRIMARY KEY,
+			user_id    TEXT NOT NULL REFERENCES {schema}_sb_tokens(id)   ON DELETE CASCADE,
+			account_id TEXT NOT NULL REFERENCES {schema}_sb_accounts(id) ON DELETE CASCADE,
+			email      TEXT NOT NULL,
+			role       INTEGER NOT NULL DEFAULT 0,
+			token      TEXT NOT NULL UNIQUE,
+			created    TIMESTAMP NOT NULL,
+			UNIQUE(user_id, account_id)
+		);
 	`, "{schema}", schema, -1)
 
 	if _, err := sl.DB.Exec(qry); err != nil {

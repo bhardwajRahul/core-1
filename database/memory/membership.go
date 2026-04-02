@@ -72,6 +72,15 @@ func (m *Memory) UserSetPassword(dbName, tokenID, password string) error {
 	return create(m, dbName, "sb_tokens", tok.ID, tok)
 }
 
+func (m *Memory) UpdateUserAccount(dbName, userID, newAccountID string) error {
+	var tok model.User
+	if err := getByID(m, dbName, "sb_tokens", userID, &tok); err != nil {
+		return err
+	}
+	tok.AccountID = newAccountID
+	return create(m, dbName, "sb_tokens", tok.ID, tok)
+}
+
 func (m *Memory) RemoveUser(auth model.Auth, dbName, userID string) error {
 	key := fmt.Sprintf("%s_sb_tokens", dbName)
 	docs, ok := m.DB[key]
