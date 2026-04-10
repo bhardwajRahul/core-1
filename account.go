@@ -602,10 +602,18 @@ func (a *accounts) getUserAccounts(w http.ResponseWriter, r *http.Request) {
 		AccountID string `json:"accountId"`
 		Role      int    `json:"role"`
 		Home      bool   `json:"home"`
+		Token     string `json:"token,omitempty"`
+	}
+
+	homeToken := fmt.Sprintf("%s|%s", user.ID, user.Token)
+	jwtBytes, err := backend.GetJWT(homeToken)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	result := []accountEntry{
-		{AccountID: user.AccountID, Role: user.Role, Home: true},
+		{AccountID: user.AccountID, Role: user.Role, Home: true, Token: string(jwtBytes)},
 	}
 	for _, assoc := range associations {
 		result = append(result, accountEntry{
