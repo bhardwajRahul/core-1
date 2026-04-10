@@ -72,12 +72,13 @@ func (m *Memory) UserSetPassword(dbName, tokenID, password string) error {
 	return create(m, dbName, "sb_tokens", tok.ID, tok)
 }
 
-func (m *Memory) UpdateUserAccount(dbName, userID, newAccountID string) error {
+func (m *Memory) UpdateUserAccount(dbName, userID, newAccountID string, role int) error {
 	var tok model.User
 	if err := getByID(m, dbName, "sb_tokens", userID, &tok); err != nil {
 		return err
 	}
 	tok.AccountID = newAccountID
+	tok.Role = role
 	return create(m, dbName, "sb_tokens", tok.ID, tok)
 }
 

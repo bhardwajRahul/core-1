@@ -97,8 +97,8 @@ type Persister interface {
 	ListAccountUsers(dbName, userID string) ([]model.AccountUser, error)
 	// DeleteAccountUser removes a cross-account association
 	DeleteAccountUser(dbName, id string) error
-	// UpdateUserAccount changes the home account of a user (used by PromoteToOwnAccount)
-	UpdateUserAccount(dbName, userID, newAccountID string) error
+	// UpdateUserAccount changes the home account and role of a user (used by PromoteToOwnAccount)
+	UpdateUserAccount(dbName, userID, newAccountID string, role int) error
 
 	// base CRUD
 	// CreateDocument creates a record in a collection

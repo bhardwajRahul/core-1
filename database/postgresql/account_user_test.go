@@ -165,7 +165,7 @@ func TestUpdateUserAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := datastore.UpdateUserAccount(confDBName, adminToken.ID, newAcctID); err != nil {
+	if err := datastore.UpdateUserAccount(confDBName, adminToken.ID, newAcctID, 50); err != nil {
 		t.Fatal(err)
 	}
 
@@ -177,7 +177,7 @@ func TestUpdateUserAccount(t *testing.T) {
 	}
 
 	// restore original account so other tests are not affected
-	if err := datastore.UpdateUserAccount(confDBName, adminToken.ID, adminToken.AccountID); err != nil {
+	if err := datastore.UpdateUserAccount(confDBName, adminToken.ID, adminToken.AccountID, adminToken.Role); err != nil {
 		t.Fatal(err)
 	}
 }

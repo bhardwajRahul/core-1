@@ -134,7 +134,7 @@ func (mg *Mongo) GetFirstUserFromAccountID(dbName, accountID string) (tok model.
 	return
 }
 
-func (mg *Mongo) UpdateUserAccount(dbName, userID, newAccountID string) error {
+func (mg *Mongo) UpdateUserAccount(dbName, userID, newAccountID string, role int) error {
 	db := mg.Client.Database(dbName)
 
 	uid, err := primitive.ObjectIDFromHex(userID)
@@ -147,7 +147,7 @@ func (mg *Mongo) UpdateUserAccount(dbName, userID, newAccountID string) error {
 	}
 
 	filter := bson.M{FieldID: uid}
-	update := bson.M{"$set": bson.M{FieldAccountID: aid}}
+	update := bson.M{"$set": bson.M{FieldAccountID: aid, "role": role}}
 	_, err = db.Collection("sb_tokens").UpdateOne(mg.Ctx, filter, update)
 	return err
 }

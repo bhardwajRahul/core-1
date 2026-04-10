@@ -123,12 +123,12 @@ func (sl *SQLite) ResetPassword(dbName, email, code, password string) error {
 	return nil
 }
 
-func (sl *SQLite) UpdateUserAccount(dbName, userID, newAccountID string) error {
+func (sl *SQLite) UpdateUserAccount(dbName, userID, newAccountID string, role int) error {
 	qry := fmt.Sprintf(`
-		UPDATE %s_sb_tokens SET account_id = $2 WHERE id = $1;
+		UPDATE %s_sb_tokens SET account_id = $2, role = $3 WHERE id = $1;
 	`, dbName)
 
-	_, err := sl.DB.Exec(qry, userID, newAccountID)
+	_, err := sl.DB.Exec(qry, userID, newAccountID, role)
 	return err
 }
 

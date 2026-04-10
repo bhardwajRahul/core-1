@@ -340,12 +340,6 @@ func (u User) GetAuthToken(tok model.User) (jwtBytes []byte, err error) {
 // to having their own home account, while preserving the old membership as an
 // association in sb_account_users.
 func (u User) PromoteToOwnAccount(auth model.Auth) (string, error) {
-	// get the user's current record to capture their role in the old account
-	currentUser, err := DB.GetFirstUserFromAccountID(u.conf.Name, auth.AccountID)
-	if err != nil {
-		return "", err
-	}
-
 	// create the user's own account
 	newAcctID, err := DB.CreateAccount(u.conf.Name, auth.Email)
 	if err != nil {
@@ -357,15 +351,15 @@ func (u User) PromoteToOwnAccount(auth model.Auth) (string, error) {
 		UserID:    auth.UserID,
 		AccountID: auth.AccountID,
 		Email:     auth.Email,
-		Role:      currentUser.Role,
+		Role:      auth.Role,
 		Token:     DB.NewID(),
 	}
 	if _, err := DB.AddAccountUser(u.conf.Name, assoc); err != nil {
 		return "", err
 	}
 
-	// move the user's home account
-	if err := DB.UpdateUserAccount(u.conf.Name, auth.UserID, newAcctID); err != nil {
+	// move the user's home account and grant Admin role (50)
+	if err := DB.UpdateUserAccount(u.conf.Name, auth.UserID, newAcctID, 50); err != nil {
 		return "", err
 	}
 
@@ -377,8 +371,8 @@ func (u User) PromoteToOwnAccount(auth model.Auth) (string, error) {
 		ID:        auth.UserID,
 		AccountID: newAcctID,
 		Email:     auth.Email,
-		Role:      currentUser.Role,
-		Token:     currentUser.Token,
+		Role:      50,
+		Token:     auth.Token,
 	}
 	jwtBytes, err := u.GetAuthToken(updatedUser)
 	if err != nil {
