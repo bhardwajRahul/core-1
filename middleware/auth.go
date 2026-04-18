@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gbrlsnchs/jwt/v3"
 	"github.com/staticbackendhq/core/cache"
@@ -76,8 +77,14 @@ func RequireAuth(datastore database.Persister, volatile cache.Volatilizer) Middl
 func ValidateAuthKey(datastore database.Persister, volatile cache.Volatilizer, ctx context.Context, key string) (model.Auth, error) {
 	a := model.Auth{}
 
+	now := time.Now()
 	var pl model.JWTPayload
-	if _, err := jwt.Verify([]byte(key), model.HashSecret, &pl); err != nil {
+	if _, err := jwt.Verify([]byte(key), model.HashSecret, &pl,
+		jwt.ValidatePayload(&pl.Payload,
+			jwt.ExpirationTimeValidator(now),
+			jwt.NotBeforeValidator(now),
+		),
+	); err != nil {
 		return a, fmt.Errorf("could not verify your authentication token: %s", err.Error())
 	}
 

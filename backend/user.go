@@ -389,7 +389,7 @@ func GetJWT(token string) ([]byte, error) {
 		Payload: jwt.Payload{
 			Issuer:         "StaticBackend",
 			ExpirationTime: jwt.NumericDate(now.Add(12 * time.Hour)),
-			NotBefore:      jwt.NumericDate(now.Add(30 * time.Minute)),
+			NotBefore:      jwt.NumericDate(now),
 			IssuedAt:       jwt.NumericDate(now),
 			JWTID:          internal.RandStringRunes(32),
 		},
