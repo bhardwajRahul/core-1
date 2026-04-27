@@ -1,5 +1,7 @@
 bin
 
+.codex
+
 # codespaces related file
 oryxBuildBinary
 

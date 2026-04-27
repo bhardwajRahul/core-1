@@ -231,6 +231,60 @@ func (m *membership) sudoGetTokenFromAccountID(w http.ResponseWriter, r *http.Re
 	respond(w, http.StatusOK, string(jwtBytes))
 }
 
+func (m *membership) getAuthTokenByUserID(w http.ResponseWriter, r *http.Request) {
+	conf, _, err := middleware.Extract(r, false)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	accountID := getURLPart(r.URL.Path, 2)
+	userID := getURLPart(r.URL.Path, 3)
+	if len(accountID) == 0 || len(userID) == 0 {
+		http.Error(w, "missing account id or user id", http.StatusBadRequest)
+		return
+	}
+
+	mship := backend.Membership(conf)
+	user, err := mship.GetUserByID(accountID, userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	jwtBytes, err := mship.GetAuthToken(user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	respond(w, http.StatusOK, string(jwtBytes))
+}
+
+func (m *membership) getUserByID(w http.ResponseWriter, r *http.Request) {
+	conf, _, err := middleware.Extract(r, false)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	accountID := getURLPart(r.URL.Path, 2)
+	userID := getURLPart(r.URL.Path, 3)
+	if len(accountID) == 0 || len(userID) == 0 {
+		http.Error(w, "missing account id or user id", http.StatusBadRequest)
+		return
+	}
+
+	mship := backend.Membership(conf)
+	user, err := mship.GetUserByID(accountID, userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	respond(w, http.StatusOK, user)
+}
+
 func (m *membership) me(w http.ResponseWriter, r *http.Request) {
 	_, auth, err := middleware.Extract(r, true)
 	if err != nil {

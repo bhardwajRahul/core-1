@@ -149,6 +149,8 @@ func Start(c config.AppConfig, log *logger.Logger) {
 	http.Handle("/oauth/get-user", middleware.Chain(http.HandlerFunc(el.getUser), pubWithDB...))
 
 	http.Handle("/sudogettoken/", middleware.Chain(http.HandlerFunc(m.sudoGetTokenFromAccountID), stdRoot...))
+	http.Handle("/sudogetauthtokenbyuserid/", middleware.Chain(http.HandlerFunc(m.getAuthTokenByUserID), stdRoot...))
+	http.Handle("/sudogetuserbyid/", middleware.Chain(http.HandlerFunc(m.getUserByID), stdRoot...))
 
 	// database routes
 	http.Handle("/db/", middleware.Chain(http.HandlerFunc(database.dbreq), stdAuth...))

@@ -336,6 +336,11 @@ func (u User) GetAuthToken(tok model.User) (jwtBytes []byte, err error) {
 	return
 }
 
+// GetUserByID returns a user by account and user IDs.
+func (u User) GetUserByID(accountID, userID string) (model.User, error) {
+	return DB.GetUserByID(u.conf.Name, accountID, userID)
+}
+
 // PromoteToOwnAccount moves a user from being a member of someone else's account
 // to having their own home account, while preserving the old membership as an
 // association in sb_account_users.
