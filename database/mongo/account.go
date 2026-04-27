@@ -245,7 +245,10 @@ func (mg *Mongo) GetUserByID(dbName, accountID, userID string) (user model.User,
 	}
 
 	filter := bson.M{FieldID: uid, FieldAccountID: aid}
+	var lt LocalToken
+
 	sr := db.Collection("sb_tokens").FindOne(mg.Ctx, filter)
-	err = sr.Decode(&user)
+	err = sr.Decode(&lt)
+	user = fromLocalToken(lt)
 	return
 }
