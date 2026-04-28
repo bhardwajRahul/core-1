@@ -71,14 +71,33 @@ func (mg *Mongo) UserEmailExists(dbName, email string) (exists bool, err error) 
 	return
 }
 
-func (mg *Mongo) SetUserRole(dbName, email string, role int) error {
+func (mg *Mongo) SetUserRole(dbName, accountID, email string, role int) error {
 	db := mg.Client.Database(dbName)
 
-	filter := bson.M{"email": email}
-	update := bson.M{"$set": bson.M{"role": role}}
-	if _, err := db.Collection("sb_tokens").UpdateOne(mg.Ctx, filter, update); err != nil {
+	aid, err := primitive.ObjectIDFromHex(accountID)
+	if err != nil {
 		return err
 	}
+
+	filter := bson.M{"email": email, FieldAccountID: aid}
+	update := bson.M{"$set": bson.M{"role": role}}
+	res, err := db.Collection("sb_tokens").UpdateOne(mg.Ctx, filter, update)
+	if err != nil {
+		return err
+	}
+
+	if res.MatchedCount > 0 {
+		return nil
+	}
+
+	res, err = db.Collection("sb_account_users").UpdateOne(mg.Ctx, filter, update)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return errors.New("user membership not found")
+	}
+
 	return nil
 }
 

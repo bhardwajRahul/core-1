@@ -57,14 +57,41 @@ func (sl *SQLite) UserEmailExists(dbName, email string) (exists bool, err error)
 	return
 }
 
-func (sl *SQLite) SetUserRole(dbName, email string, role int) error {
+func (sl *SQLite) SetUserRole(dbName, accountID, email string, role int) error {
 	qry := fmt.Sprintf(`
-		UPDATE %s_sb_tokens SET role = $2
-		WHERE email = $1;
+		UPDATE %s_sb_tokens SET role = $3
+		WHERE email = $1 AND account_id = $2;
 	`, dbName)
 
-	if _, err := sl.DB.Exec(qry, email, role); err != nil {
+	res, err := sl.DB.Exec(qry, email, accountID, role)
+	if err != nil {
 		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows > 0 {
+		return nil
+	}
+
+	qry = fmt.Sprintf(`
+		UPDATE %s_sb_account_users SET role = $3
+		WHERE email = $1 AND account_id = $2;
+	`, dbName)
+
+	res, err = sl.DB.Exec(qry, email, accountID, role)
+	if err != nil {
+		return err
+	}
+
+	rows, err = res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("user membership not found")
 	}
 	return nil
 }

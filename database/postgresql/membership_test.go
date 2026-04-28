@@ -82,7 +82,7 @@ func TestSetUserRole(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := datastore.SetUserRole(confDBName, newTok.Email, 90); err != nil {
+	if err := datastore.SetUserRole(confDBName, newTok.AccountID, newTok.Email, 90); err != nil {
 		t.Fatal(err)
 	}
 

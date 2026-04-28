@@ -279,10 +279,10 @@ func (u User) ResetPassword(email, code, password string) error {
 	return DB.ResetPassword(u.conf.Name, email, code, string(b))
 }
 
-// SetUserRole changes the role of a user
-func (u User) SetUserRole(email string, role int) error {
+// SetUserRole changes the role of a user's membership in a specific account.
+func (u User) SetUserRole(accountID, email string, role int) error {
 	email = strings.ToLower(email)
-	return DB.SetUserRole(u.conf.Name, email, role)
+	return DB.SetUserRole(u.conf.Name, accountID, email, role)
 }
 
 // UserSetPassword password changes initiated by the user

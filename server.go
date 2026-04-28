@@ -139,7 +139,7 @@ func Start(c config.AppConfig, log *logger.Logger) {
 	http.Handle("/email", middleware.Chain(http.HandlerFunc(m.emailExists), pubWithDB...))
 	http.Handle("/password/resetcode", middleware.Chain(http.HandlerFunc(m.setResetCode), stdRoot...))
 	http.Handle("/password/reset", middleware.Chain(http.HandlerFunc(m.resetPassword), pubWithDB...))
-	//http.Handle("/setrole", chain(http.HandlerFunc(setRole), withDB))
+	http.Handle("/setrole", middleware.Chain(http.HandlerFunc(m.setRole), stdAuth...))
 	http.Handle("/me", middleware.Chain(http.HandlerFunc(m.me), stdAuth...))
 
 	// oauth handlers

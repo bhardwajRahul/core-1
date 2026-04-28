@@ -54,14 +54,41 @@ func (pg *PostgreSQL) UserEmailExists(dbName, email string) (exists bool, err er
 	return
 }
 
-func (pg *PostgreSQL) SetUserRole(dbName, email string, role int) error {
+func (pg *PostgreSQL) SetUserRole(dbName, accountID, email string, role int) error {
 	qry := fmt.Sprintf(`
-		UPDATE %s.sb_tokens SET role = $2
-		WHERE email = $1;
+		UPDATE %s.sb_tokens SET role = $3
+		WHERE email = $1 AND account_id = $2;
 	`, dbName)
 
-	if _, err := pg.DB.Exec(qry, email, role); err != nil {
+	res, err := pg.DB.Exec(qry, email, accountID, role)
+	if err != nil {
 		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows > 0 {
+		return nil
+	}
+
+	qry = fmt.Sprintf(`
+		UPDATE %s.sb_account_users SET role = $3
+		WHERE email = $1 AND account_id = $2;
+	`, dbName)
+
+	res, err = pg.DB.Exec(qry, email, accountID, role)
+	if err != nil {
+		return err
+	}
+
+	rows, err = res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("user membership not found")
 	}
 	return nil
 }

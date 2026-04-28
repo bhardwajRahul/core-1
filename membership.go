@@ -139,26 +139,38 @@ func (m *membership) resetPassword(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, true)
 }
 
-/*
-TODO: those function are not used in the API ???
 func (m *membership) setRole(w http.ResponseWriter, r *http.Request) {
 	conf, a, err := middleware.Extract(r, true)
-	if err != nil || a.Role < 100 {
+	if err != nil || a.Role < 50 {
 		http.Error(w, "insufficient priviledges", http.StatusUnauthorized)
 		return
 	}
 
 	var data = new(struct {
-		Email string `json:"email"`
-		Role  int    `json:"role"`
+		AccountID string `json:"accountId"`
+		Email     string `json:"email"`
+		Role      int    `json:"role"`
 	})
 	if err := parseBody(r.Body, &data); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	if len(data.Email) == 0 {
+		http.Error(w, "missing account id or email", http.StatusBadRequest)
+		return
+	} else if data.Role > 50 {
+		http.Error(w, "role cannot be > than 50", http.StatusBadRequest)
+		return
+	}
+
+	if len(data.AccountID) == 0 {
+		// if no account id specify we default to current authenticated user
+		data.AccountID = a.AccountID
+	}
+
 	mship := backend.Membership(conf)
-	if err := mship.SetUserRole(data.Email, data.Role); err != nil {
+	if err := mship.SetUserRole(data.AccountID, data.Email, data.Role); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -166,6 +178,7 @@ func (m *membership) setRole(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, true)
 }
 
+/*
 func (m *membership) setPassword(w http.ResponseWriter, r *http.Request) {
 	conf, a, err := middleware.Extract(r, true)
 	if err != nil || a.Role < 100 {

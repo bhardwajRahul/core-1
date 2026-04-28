@@ -52,14 +52,26 @@ func (m *Memory) ResetPassword(dbName, email, code, password string) error {
 	return create(m, dbName, "sb_tokens", tok.ID, tok)
 }
 
-func (m *Memory) SetUserRole(dbName, email string, role int) error {
+func (m *Memory) SetUserRole(dbName, accountID, email string, role int) error {
 	tok, err := m.FindUserByEmail(dbName, email)
+	if err == nil && tok.AccountID == accountID {
+		tok.Role = role
+		return create(m, dbName, "sb_tokens", tok.ID, tok)
+	}
+
+	accountUsers, err := all[model.AccountUser](m, dbName, "sb_account_users")
 	if err != nil {
 		return err
 	}
 
-	tok.Role = role
-	return create(m, dbName, "sb_tokens", tok.ID, tok)
+	for _, au := range accountUsers {
+		if au.Email == email && au.AccountID == accountID {
+			au.Role = role
+			return create(m, dbName, "sb_account_users", au.ID, au)
+		}
+	}
+
+	return fmt.Errorf("user membership not found")
 }
 
 func (m *Memory) UserSetPassword(dbName, tokenID, password string) error {

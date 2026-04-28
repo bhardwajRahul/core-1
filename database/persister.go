@@ -79,8 +79,8 @@ type Persister interface {
 	SetPasswordResetCode(dbName, tokenID, code string) error
 	// ResetPassword resets a user password
 	ResetPassword(dbName, email, code, password string) error
-	// SetUserRole sets a user's role
-	SetUserRole(dbName, email string, role int) error
+	// SetUserRole sets a user's role for a specific account membership
+	SetUserRole(dbName, accountID, email string, role int) error
 	// UserSetPassword user initiated password reset
 	UserSetPassword(dbName, userID, password string) error
 	// RemoveUser permanently removes a user from an account
