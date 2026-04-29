@@ -2,6 +2,7 @@ package postgresql
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/staticbackendhq/core/model"
 )
@@ -84,6 +85,86 @@ func (pg *PostgreSQL) ListAllFiles(dbName, accountID string) (results []model.Fi
 	err = rows.Err()
 
 	return
+}
+
+func (pg *PostgreSQL) GetTotalFileBytes(dbName, accountID string) (total int64, err error) {
+	qry := fmt.Sprintf(`
+		SELECT COALESCE(SUM(size), 0)
+		FROM %s.sb_files
+		WHERE account_id = $1
+	`, dbName)
+
+	err = pg.DB.QueryRow(qry, accountID).Scan(&total)
+	if err != nil && !isTableExists(err) {
+		return 0, nil
+	}
+
+	return
+}
+
+func (pg *PostgreSQL) ListFiles(dbName, accountID string, params model.ListParams) (results []model.File, total int64, err error) {
+	orderBy := fileOrderBy(params)
+	offset := (params.Page - 1) * params.Size
+
+	qry := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM %s.sb_files
+		WHERE account_id = $1
+	`, dbName)
+
+	if err = pg.DB.QueryRow(qry, accountID).Scan(&total); err != nil {
+		if !isTableExists(err) {
+			return []model.File{}, 0, nil
+		}
+		return nil, 0, err
+	}
+
+	qry = fmt.Sprintf(`
+		SELECT *
+		FROM %s.sb_files
+		WHERE account_id = $1
+		ORDER BY %s
+		LIMIT $2 OFFSET $3
+	`, dbName, orderBy)
+
+	rows, err := pg.DB.Query(qry, accountID, params.Size, offset)
+	if err != nil {
+		if !isTableExists(err) {
+			return []model.File{}, total, nil
+		}
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var f model.File
+		if err = scanFile(rows, &f); err != nil {
+			return nil, 0, err
+		}
+
+		results = append(results, f)
+	}
+
+	if results == nil {
+		results = []model.File{}
+	}
+
+	err = rows.Err()
+	return
+}
+
+func fileOrderBy(params model.ListParams) string {
+	field := "uploaded"
+	if strings.EqualFold(params.SortBy, "size") {
+		field = "size"
+	}
+
+	direction := "ASC"
+	if params.SortDescending {
+		direction = "DESC"
+	}
+
+	return fmt.Sprintf("%s %s", field, direction)
 }
 
 func scanFile(rows Scanner, f *model.File) error {

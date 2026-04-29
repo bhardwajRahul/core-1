@@ -3,6 +3,7 @@ package backend
 import (
 	"fmt"
 	"io"
+	"math"
 	"mime"
 	"path/filepath"
 	"time"
@@ -28,6 +29,12 @@ func newFile(auth model.Auth, conf model.DatabaseConfig) FileStore {
 type SavedFile struct {
 	ID  string `json:"id"`
 	URL string `json:"url"`
+}
+
+func bytesToGB(size int64) float64 {
+	const gb = 1_000_000_000
+
+	return math.Round((float64(size)/gb)*100) / 100
 }
 
 // Save saves a file content to the file storage (Storer interface) and to the
@@ -97,4 +104,32 @@ func (f FileStore) Delete(fileID string) error {
 		return err
 	}
 	return nil
+}
+
+// Usage returns the total bytes and a friendly GB value for the current account.
+func (f FileStore) Usage() (model.FileUsage, error) {
+	total, err := DB.GetTotalFileBytes(f.conf.Name, f.auth.AccountID)
+	if err != nil {
+		return model.FileUsage{}, err
+	}
+
+	return model.FileUsage{
+		Bytes: total,
+		GB:    bytesToGB(total),
+	}, nil
+}
+
+// ListFiles returns a paginated file listing for the current account.
+func (f FileStore) ListFiles(params model.ListParams) (model.FileListResult, error) {
+	files, total, err := DB.ListFiles(f.conf.Name, f.auth.AccountID, params)
+	if err != nil {
+		return model.FileListResult{}, err
+	}
+
+	return model.FileListResult{
+		Page:    params.Page,
+		Size:    params.Size,
+		Total:   total,
+		Results: files,
+	}, nil
 }

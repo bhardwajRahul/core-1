@@ -1,6 +1,7 @@
 package postgresql
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -57,5 +58,100 @@ func TestFileStorage(t *testing.T) {
 		t.Errorf("error should not be nil")
 	} else if check.ID == id {
 		t.Errorf("deleted file id returned? %v", check)
+	}
+}
+
+func TestFileUsageAndListFiles(t *testing.T) {
+	accountID, err := datastore.CreateAccount(confDBName, fmt.Sprintf("fileusage-%d@test.com", time.Now().UnixNano()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	otherAccountID, err := datastore.CreateAccount(confDBName, fmt.Sprintf("fileusage-other-%d@test.com", time.Now().UnixNano()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	var expectedTotal int64
+
+	for i := 0; i < 30; i++ {
+		size := int64(i + 1)
+		expectedTotal += size
+
+		_, err = datastore.AddFile(confDBName, model.File{
+			AccountID: accountID,
+			Key:       fmt.Sprintf("acct-file-%02d", i),
+			URL:       fmt.Sprintf("https://test/%02d", i),
+			Size:      size,
+			Uploaded:  now.Add(time.Duration(i) * time.Minute),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	_, err = datastore.AddFile(confDBName, model.File{
+		AccountID: otherAccountID,
+		Key:       "other-account-file",
+		URL:       "https://test/other",
+		Size:      9999,
+		Uploaded:  now.Add(31 * time.Minute),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	total, err := datastore.GetTotalFileBytes(confDBName, accountID)
+	if err != nil {
+		t.Fatal(err)
+	} else if total != expectedTotal {
+		t.Fatalf("expected total bytes %d got %d", expectedTotal, total)
+	}
+
+	files, count, err := datastore.ListFiles(confDBName, accountID, model.ListParams{
+		Page:           1,
+		Size:           25,
+		SortDescending: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	} else if count != 30 {
+		t.Fatalf("expected count 30 got %d", count)
+	} else if len(files) != 25 {
+		t.Fatalf("expected 25 files got %d", len(files))
+	} else if files[0].Size != 30 {
+		t.Fatalf("expected latest file first with size 30 got %d", files[0].Size)
+	}
+
+	files, count, err = datastore.ListFiles(confDBName, accountID, model.ListParams{
+		Page:           2,
+		Size:           25,
+		SortDescending: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	} else if count != 30 {
+		t.Fatalf("expected count 30 got %d", count)
+	} else if len(files) != 5 {
+		t.Fatalf("expected 5 files on page 2 got %d", len(files))
+	} else if files[0].Size != 5 {
+		t.Fatalf("expected page 2 to start at size 5 got %d", files[0].Size)
+	}
+
+	files, count, err = datastore.ListFiles(confDBName, accountID, model.ListParams{
+		Page:           1,
+		Size:           25,
+		SortBy:         "size",
+		SortDescending: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	} else if count != 30 {
+		t.Fatalf("expected count 30 got %d", count)
+	} else if files[0].Size != 30 {
+		t.Fatalf("expected largest file first got %d", files[0].Size)
+	} else if files[len(files)-1].Size != 6 {
+		t.Fatalf("expected last item on first page to have size 6 got %d", files[len(files)-1].Size)
 	}
 }

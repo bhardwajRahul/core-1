@@ -2,12 +2,14 @@ package mongo
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/staticbackendhq/core/model"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type LocalFile struct {
@@ -147,4 +149,94 @@ func (mg *Mongo) ListAllFiles(dbName, accountID string) ([]model.File, error) {
 	}
 
 	return results, nil
+}
+
+func (mg *Mongo) GetTotalFileBytes(dbName, accountID string) (int64, error) {
+	db := mg.Client.Database(dbName)
+
+	aid, err := primitive.ObjectIDFromHex(accountID)
+	if err != nil {
+		return 0, err
+	}
+
+	pipeline := []bson.M{
+		{"$match": bson.M{FieldAccountID: aid}},
+		{"$group": bson.M{"_id": nil, "total": bson.M{"$sum": "$size"}}},
+	}
+
+	cur, err := db.Collection("sb_files").Aggregate(mg.Ctx, pipeline)
+	if err != nil {
+		return 0, err
+	}
+	defer cur.Close(mg.Ctx)
+
+	var row struct {
+		Total int64 `bson:"total"`
+	}
+
+	if cur.Next(mg.Ctx) {
+		if err := cur.Decode(&row); err != nil {
+			return 0, err
+		}
+	}
+
+	if err := cur.Err(); err != nil {
+		return 0, err
+	}
+
+	return row.Total, nil
+}
+
+func (mg *Mongo) ListFiles(dbName, accountID string, params model.ListParams) ([]model.File, int64, error) {
+	db := mg.Client.Database(dbName)
+
+	aid, err := primitive.ObjectIDFromHex(accountID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	filter := bson.M{FieldAccountID: aid}
+
+	total, err := db.Collection("sb_files").CountDocuments(mg.Ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	sortField := "on"
+	if strings.EqualFold(params.SortBy, "size") {
+		sortField = "size"
+	}
+
+	sortDir := 1
+	if params.SortDescending {
+		sortDir = -1
+	}
+
+	skips := params.Size * (params.Page - 1)
+	opt := options.Find().
+		SetSort(bson.M{sortField: sortDir}).
+		SetSkip(skips).
+		SetLimit(params.Size)
+
+	sr, err := db.Collection("sb_files").Find(mg.Ctx, filter, opt)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer sr.Close(mg.Ctx)
+
+	results := make([]model.File, 0)
+	for sr.Next(mg.Ctx) {
+		var f LocalFile
+		if err = sr.Decode(&f); err != nil {
+			return nil, 0, err
+		}
+
+		results = append(results, fromLocalFile(f))
+	}
+
+	if err := sr.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return results, total, nil
 }

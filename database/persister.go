@@ -172,6 +172,10 @@ type Persister interface {
 	GetFileByID(dbName, fileID string) (f model.File, err error)
 	// DeleteFile removes a file
 	DeleteFile(dbName, fileID string) error
+	// GetTotalFileBytes returns the total bytes used by an account
+	GetTotalFileBytes(dbName, accountID string) (int64, error)
+	// ListFiles returns paginated files and the total number of matches for an account
+	ListFiles(dbName, accountID string, params model.ListParams) ([]model.File, int64, error)
 	// ListAllFiles lists all file
 	ListAllFiles(dbName, accountID string) ([]model.File, error)
 	// Count returns the numbers of entries in a collection based on optional filters

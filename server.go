@@ -170,6 +170,8 @@ func Start(c config.AppConfig, log *logger.Logger) {
 
 	// storage
 	http.Handle("/storage/upload", middleware.Chain(http.HandlerFunc(upload), stdAuth...))
+	http.Handle("/storage/usage", middleware.Chain(http.HandlerFunc(storageUsage), stdAuth...))
+	http.Handle("/storage/files", middleware.Chain(http.HandlerFunc(listFiles), stdAuth...))
 	http.Handle("/sudostorage/delete", middleware.Chain(http.HandlerFunc(deleteFile), stdRoot...))
 
 	// sudo actions
