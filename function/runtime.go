@@ -225,6 +225,7 @@ func (env *ExecutionEnvironment) addHelpers(vm *goja.Runtime) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -427,6 +428,7 @@ func (env *ExecutionEnvironment) addDatabaseFunctions(vm *goja.Runtime) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -466,6 +468,7 @@ func (env *ExecutionEnvironment) addSendMail(vm *goja.Runtime) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -615,6 +618,32 @@ func (env *ExecutionEnvironment) addVolatileFunctions(vm *goja.Runtime) error {
 	if err != nil {
 		return err
 	}
+
+	err = vm.Set("deleteIndexDocument", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 2 {
+			return vm.ToValue(Result{Content: "argument missmatch: you need 2 arguments for deleteIndexDocument(col, id)"})
+		}
+
+		var col, id string
+		if err := vm.ExportTo(call.Argument(0), &col); err != nil {
+			return vm.ToValue(Result{Content: "the first argument should be a string"})
+		} else if err := vm.ExportTo(call.Argument(1), &id); err != nil {
+			return vm.ToValue(Result{Content: "the second argument should be a string"})
+		}
+
+		if env.Search == nil {
+			return vm.ToValue(Result{Content: "full-text search is not enabled"})
+		}
+
+		if err := env.Search.Delete(env.BaseName, col, id); err != nil {
+			return vm.ToValue(Result{Content: fmt.Sprintf("error while trying to delete the indexed document: %v", err)})
+		}
+
+		return vm.ToValue(Result{OK: true})
+	})
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -629,6 +658,10 @@ func (env *ExecutionEnvironment) addSearch(vm *goja.Runtime) error {
 			return vm.ToValue(Result{Content: "the first argument should be a string"})
 		} else if err := vm.ExportTo(call.Argument(1), &keywords); err != nil {
 			return vm.ToValue(Result{Content: "the second argument should be a string"})
+		}
+
+		if env.Search == nil {
+			return vm.ToValue(Result{Content: "full-text search is not enabled"})
 		}
 
 		results, err := env.Search.Search(env.BaseName, col, keywords)
@@ -663,12 +696,42 @@ func (env *ExecutionEnvironment) addSearch(vm *goja.Runtime) error {
 			return vm.ToValue(Result{Content: "the first argument should be a string"})
 		} else if err := vm.ExportTo(call.Argument(1), &id); err != nil {
 			return vm.ToValue(Result{Content: "the second argument should be a string"})
-		} else if err := vm.ExportTo(call.Argument(1), &text); err != nil {
+		} else if err := vm.ExportTo(call.Argument(2), &text); err != nil {
 			return vm.ToValue(Result{Content: "the third argument should be a string"})
+		}
+
+		if env.Search == nil {
+			return vm.ToValue(Result{Content: "full-text search is not enabled"})
 		}
 
 		if err := env.Search.Index(env.BaseName, col, id, text); err != nil {
 			return vm.ToValue(Result{Content: fmt.Sprintf("error while trying to index the document: %v", err)})
+		}
+
+		return vm.ToValue(Result{OK: true})
+	})
+	if err != nil {
+		return err
+	}
+
+	err = vm.Set("deleteIndexDocument", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 2 {
+			return vm.ToValue(Result{Content: "argument missmatch: you need 2 arguments for deleteIndexDocument(col, id)"})
+		}
+
+		var col, id string
+		if err := vm.ExportTo(call.Argument(0), &col); err != nil {
+			return vm.ToValue(Result{Content: "the first argument should be a string"})
+		} else if err := vm.ExportTo(call.Argument(1), &id); err != nil {
+			return vm.ToValue(Result{Content: "the second argument should be a string"})
+		}
+
+		if env.Search == nil {
+			return vm.ToValue(Result{Content: "full-text search is not enabled"})
+		}
+
+		if err := env.Search.Delete(env.BaseName, col, id); err != nil {
+			return vm.ToValue(Result{Content: fmt.Sprintf("error while trying to delete the indexed document: %v", err)})
 		}
 
 		return vm.ToValue(Result{OK: true})

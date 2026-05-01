@@ -504,6 +504,11 @@ func (database *Database) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if backend.Search == nil {
+		http.Error(w, "full-text search is not enabled", http.StatusServiceUnavailable)
+		return
+	}
+
 	result, err := backend.Search.Search(conf.Name, data.Col, data.Keywords)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

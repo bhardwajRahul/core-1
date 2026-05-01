@@ -506,9 +506,6 @@ func TestDBSearchIndexAndQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// wait for the go routine for the pubsub to complete
-	time.Sleep(3 * time.Second)
-
 	data := SearchData{Col: "tasks", Keywords: "adding search"}
 	resp2 := dbReq(t, db.search, "POST", "/search", data)
 	defer resp2.Body.Close()
