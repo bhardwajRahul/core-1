@@ -1,0 +1,13 @@
+.git
+.codex
+.env
+*.db
+*.fts
+*.out
+*.test
+bin/
+cmd/staticbackend
+dist/
+mongodata/
+postgres-data/
+search/testdata/

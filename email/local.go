@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/smtp"
 	"strings"
+
+	"github.com/staticbackendhq/core/config"
 )
 
 type Local struct{}
@@ -24,8 +26,13 @@ func (Local) Send(data SendMailData) error {
 
 	// Send email via SMTP
 	// Mailpit doesn't require authentication
+	addr := config.Current.MailpitSMTPAddr
+	if addr == "" {
+		addr = "localhost:1025"
+	}
+
 	err = smtp.SendMail(
-		"localhost:1025",
+		addr,
 		nil, // no auth
 		data.From,
 		[]string{data.To},

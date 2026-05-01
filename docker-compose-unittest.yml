@@ -2,36 +2,33 @@ version: "3.8"
 
 services:
   db:
-    image: postgres:15-alpine
-    container_name: core_pg
+    image: postgres:16-alpine
     restart: always
     ports:
-      - "5432:5432"
+      - "15432:5432"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-    volumes: 
+    volumes:
       - ./database/postgresql/sql/0001_bootstrap_db.sql:/docker-entrypoint-initdb.d/create_tables.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
-  
+
   mongo:
     image: mongo:4.4
-    container_name: core_mongo
     ports:
-      - "27017:27017"
+      - "27018:27017"
 
   redis:
-    image: "redis:alpine"
-    container_name: core_redis
+    image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "16379:6379"
 
   mailpit:
     image: axllent/mailpit
     ports:
-      - "8025:8025" # Web UI
-      - "1025:1025" # SMTP Port
+      - "18025:8025" # Web UI
+      - "11025:1025" # SMTP Port

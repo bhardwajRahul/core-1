@@ -33,6 +33,10 @@ type AppConfig struct {
 
 	// MailProvider used as the sending mails implementeation
 	MailProvider string
+	// MailpitSMTPAddr is the SMTP address used by the local mail provider.
+	MailpitSMTPAddr string
+	// MailpitAPIURL is the HTTP API URL used by tests to inspect local mail.
+	MailpitAPIURL string
 	// FromEmail used when SB sends email
 	FromEmail string
 	// FromName used when SB sends email
@@ -112,6 +116,8 @@ func LoadConfig() AppConfig {
 		DataStore:                os.Getenv("DATA_STORE"),
 		DatabaseURL:              os.Getenv("DATABASE_URL"),
 		MailProvider:             os.Getenv("MAIL_PROVIDER"),
+		MailpitSMTPAddr:          os.Getenv("MAILPIT_SMTP_ADDR"),
+		MailpitAPIURL:            os.Getenv("MAILPIT_API_URL"),
 		FromEmail:                os.Getenv("FROM_EMAIL"),
 		FromName:                 os.Getenv("FROM_NAME"),
 		StorageProvider:          os.Getenv("STORAGE_PROVIDER"),

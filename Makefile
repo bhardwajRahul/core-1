@@ -1,5 +1,11 @@
--include .env
-export $(shell test -f .env && sed 's/=.*//' .env)
+ENV_FILE ?= .env
+DOCKER_COMPOSE ?= $(shell if docker compose version >/dev/null 2>&1; then echo docker compose; else echo docker-compose; fi)
+TEST_COMPOSE_PROJECT ?= staticbackend-test
+TEST_COMPOSE_FILE ?= docker-compose-unittest.yml
+TEST_COMPOSE = $(DOCKER_COMPOSE) -p $(TEST_COMPOSE_PROJECT) -f $(TEST_COMPOSE_FILE)
+
+-include $(ENV_FILE)
+export $(shell test -f $(ENV_FILE) && sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' $(ENV_FILE))
 
 cleanup:
 	@rm -rf dev.db && rm -rf backend/dev.db
@@ -31,7 +37,7 @@ test-pg:
 	@cd database/postgresql && go test --race --cover
 
 test-mdb:
-	@cd database/mongo && go test --race --cover 
+	@cd database/mongo && go test --race --cover
 
 test-mem:
 	@rm -rf database/memory/mem.db
@@ -66,6 +72,38 @@ test-search:
 
 test-components: test-backend test-cache test-storage test-intl test-extra test-search
 	@echo ""
+
+test-services-up:
+	@$(TEST_COMPOSE) up -d
+
+test-services-wait:
+	@echo "Waiting for PostgreSQL..."
+	@timeout 60 sh -c 'until $(TEST_COMPOSE) exec -T db pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done'
+	@echo "Waiting for MongoDB..."
+	@timeout 60 sh -c 'until $(TEST_COMPOSE) exec -T mongo mongo --quiet --eval "db.runCommand({ ping: 1 }).ok" >/dev/null 2>&1; do sleep 1; done'
+	@echo "Waiting for Redis..."
+	@timeout 60 sh -c 'until $(TEST_COMPOSE) exec -T redis redis-cli ping >/dev/null 2>&1; do sleep 1; done'
+
+test-services-down:
+	@$(TEST_COMPOSE) down --remove-orphans
+
+test-services-clean:
+	@$(TEST_COMPOSE) down -v --remove-orphans
+
+test-cache-flush:
+	@$(TEST_COMPOSE) exec -T redis redis-cli FLUSHDB
+
+test-ci-local: test-services-up test-services-wait
+	@$(MAKE) ENV_FILE=.env.test.pg build
+	@$(MAKE) ENV_FILE=.env.test.pg plugin
+	@$(MAKE) ENV_FILE=.env.test.pg test-core
+	@$(MAKE) test-cache-flush
+	@$(MAKE) ENV_FILE=.env.test.mongo test-core
+	@$(MAKE) ENV_FILE=.env.test.pg test-dbs
+	@$(MAKE) ENV_FILE=.env.test.pg test-components
+
+test-ci-local-clean:
+	@set -e; trap '$(MAKE) test-services-clean' EXIT; $(MAKE) test-ci-local
 
 
 stripe-dev:

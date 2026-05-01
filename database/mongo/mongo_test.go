@@ -41,7 +41,15 @@ func TestMain(m *testing.M) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	cl, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
+	uri := os.Getenv("MONGO_TEST_DATABASE_URL")
+	if uri == "" {
+		uri = config.Current.DatabaseURL
+	}
+	if uri == "" {
+		uri = "mongodb://localhost:27017"
+	}
+
+	cl, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
 	if err != nil {
 		log.Fatal(err)
 	}

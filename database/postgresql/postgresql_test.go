@@ -35,7 +35,15 @@ func fakePubDocEvent(auth model.Auth, dbName, channel, typ string, v interface{}
 func TestMain(m *testing.M) {
 	config.Current = config.LoadConfig()
 
-	dbConn, err := sql.Open("postgres", "user=postgres password=postgres dbname=postgres sslmode=disable")
+	dsn := os.Getenv("POSTGRES_TEST_DATABASE_URL")
+	if dsn == "" {
+		dsn = config.Current.DatabaseURL
+	}
+	if dsn == "" {
+		dsn = "user=postgres password=postgres dbname=postgres sslmode=disable"
+	}
+
+	dbConn, err := sql.Open("postgres", dsn)
 	if err != nil {
 		log.Fatal(err)
 	}

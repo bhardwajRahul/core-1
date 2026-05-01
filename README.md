@@ -327,11 +327,26 @@ You may use the following channels to get help and support.
 
 ## Contributing
 
-If you have any feedback (good or bad) we'd be more than happy to talk. Please 
+### Local tests
+
+The local BaaS runtime uses your ignored `.env` file. The GitHub-equivalent test
+path uses committed test env files instead, so running tests does not overwrite
+or mutate your local development settings.
+
+```shell
+$ make test-ci-local-clean
+```
+
+This starts an isolated Docker Compose test stack on non-default host ports,
+runs the PostgreSQL core pass, Mongo core pass, database provider tests, and
+component tests, then removes the test containers and volumes. Use
+`make test-ci-local` if you want to leave the test services running.
+
+If you have any feedback (good or bad) we'd be more than happy to talk. Please
 use the [Discussions](https://github.com/staticbackendhq/core/discussions) tab.
 
 Same for contributing. The easiest is to get in touch first. We're working 
-to make it easier to contribute code. If you'd like to work on something 
+to make it easier to contribute code. If you'd like to work on something
 precise let us know.
 
 Here are videos made specifically for people wanting to contribute:

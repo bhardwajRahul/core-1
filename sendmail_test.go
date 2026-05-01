@@ -13,6 +13,13 @@ import (
 	"github.com/staticbackendhq/core/email"
 )
 
+func mailpitAPIURL() string {
+	if config.Current.MailpitAPIURL != "" {
+		return config.Current.MailpitAPIURL
+	}
+	return "http://localhost:8025"
+}
+
 func Test_Sendmail(t *testing.T) {
 	data := email.SendMailData{
 		FromName: config.Current.FromName,
@@ -60,7 +67,7 @@ func TestSendMailWithAttachment(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// Verify email in Mailpit
-	mailpitResp, err := http.Get("http://localhost:8025/api/v1/messages")
+	mailpitResp, err := http.Get(mailpitAPIURL() + "/api/v1/messages")
 	if err != nil {
 		t.Fatalf("failed to query Mailpit API: %v", err)
 	}
@@ -120,7 +127,7 @@ func TestSendMailWithAttachment(t *testing.T) {
 	}
 
 	// Get full message details to verify attachment
-	msgResp, err := http.Get(fmt.Sprintf("http://localhost:8025/api/v1/message/%s", messageID))
+	msgResp, err := http.Get(fmt.Sprintf("%s/api/v1/message/%s", mailpitAPIURL(), messageID))
 	if err != nil {
 		t.Fatalf("failed to get message details from Mailpit: %v", err)
 	}
