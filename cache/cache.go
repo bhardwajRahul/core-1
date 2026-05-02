@@ -4,6 +4,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,7 +13,13 @@ import (
 	"github.com/staticbackendhq/core/logger"
 	"github.com/staticbackendhq/core/model"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
+)
+
+const (
+	pubSubChannelSize         = 256
+	pubSubHealthCheckInterval = 30 * time.Second
+	pubSubSendTimeout         = 5 * time.Second
 )
 
 // Cache uses Redis to implement the Volatilizer interface
@@ -99,12 +106,26 @@ func (c *Cache) Subscribe(send chan model.Command, token, channel string, close 
 		c.log.Error().Err(err).Msg("error establishing PubSub subscription")
 		return
 	}
+	defer func() {
+		if err := pubsub.Close(); err != nil && !errors.Is(err, redis.ErrClosed) {
+			c.log.Warn().Err(err).Msg("error closing PubSub subscription")
+		}
+	}()
 
-	ch := pubsub.Channel()
+	ch := pubsub.Channel(
+		redis.WithChannelSize(pubSubChannelSize),
+		redis.WithChannelHealthCheckInterval(pubSubHealthCheckInterval),
+		redis.WithChannelSendTimeout(pubSubSendTimeout),
+	)
 
 	for {
 		select {
-		case m := <-ch:
+		case m, ok := <-ch:
+			if !ok {
+				c.log.Warn().Msgf("PubSub channel closed: %s", channel)
+				return
+			}
+
 			var msg model.Command
 			if err := json.Unmarshal([]byte(m.Payload), &msg); err != nil {
 				c.log.Error().Err(err).Msg("error parsing JSON message")
@@ -119,11 +140,27 @@ func (c *Cache) Subscribe(send chan model.Command, token, channel string, close 
 			} else if msg.IsDBEvent() && !c.HasPermission(token, channel, msg.Data) {
 				continue
 			}
-			send <- msg
+			if !c.sendMessage(send, close, msg) {
+				return
+			}
 		case <-close:
-			_ = pubsub.Close()
 			return
 		}
+	}
+}
+
+func (c *Cache) sendMessage(send chan model.Command, close chan bool, msg model.Command) bool {
+	timer := time.NewTimer(pubSubSendTimeout)
+	defer timer.Stop()
+
+	select {
+	case send <- msg:
+		return true
+	case <-close:
+		return false
+	case <-timer.C:
+		c.log.Warn().Msgf("dropping PubSub message after blocked receiver timeout: %s", msg.Channel)
+		return true
 	}
 }
 
@@ -247,7 +284,7 @@ func (c *Cache) QueueWork(key, value string) error {
 func (c *Cache) DequeueWork(key string) (string, error) {
 	val, err := c.Rdb.LPop(c.Ctx, key).Result()
 	if err != nil {
-		if err.Error() == redis.Nil.Error() {
+		if errors.Is(err, redis.Nil) {
 			return "", nil
 		}
 		return "", err
