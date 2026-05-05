@@ -58,6 +58,39 @@ func TestGetAccountUser(t *testing.T) {
 	}
 }
 
+func TestAssociationExists(t *testing.T) {
+	acctID, err := datastore.CreateAccount(confDBName, "au-exists@test.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exists, err := datastore.AssociationExists(confDBName, adminToken.ID, acctID)
+	if err != nil {
+		t.Fatal(err)
+	} else if exists {
+		t.Fatal("association should not exist before insert")
+	}
+
+	au := model.AccountUser{
+		UserID:    adminToken.ID,
+		AccountID: acctID,
+		Email:     adminEmail,
+		Role:      0,
+		Token:     "assoc-token-exists",
+		Created:   time.Now(),
+	}
+	if _, err := datastore.AddAccountUser(confDBName, au); err != nil {
+		t.Fatal(err)
+	}
+
+	exists, err = datastore.AssociationExists(confDBName, adminToken.ID, acctID)
+	if err != nil {
+		t.Fatal(err)
+	} else if !exists {
+		t.Fatal("association should exist after insert")
+	}
+}
+
 func TestFindAccountUserByToken(t *testing.T) {
 	acctID, err := datastore.CreateAccount(confDBName, "au-findbytoken@test.com")
 	if err != nil {

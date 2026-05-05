@@ -27,6 +27,19 @@ func (pg *PostgreSQL) AddAccountUser(dbName string, au model.AccountUser) (id st
 	return
 }
 
+func (pg *PostgreSQL) AssociationExists(dbName, userID, accountID string) (exists bool, err error) {
+	qry := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM %s.sb_account_users
+		WHERE user_id = $1 AND account_id = $2;
+	`, dbName)
+
+	var count int
+	err = pg.DB.QueryRow(qry, userID, accountID).Scan(&count)
+	exists = count > 0
+	return
+}
+
 func (pg *PostgreSQL) GetAccountUser(dbName, userID, accountID string) (au model.AccountUser, err error) {
 	qry := fmt.Sprintf(`
 		SELECT id, user_id, account_id, email, role, token, created

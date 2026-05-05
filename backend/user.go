@@ -42,6 +42,23 @@ func (u User) Authenticate(email, password string, accountID ...string) (string,
 
 	// if an accountID is provided and differs from the home account, look up the association
 	if len(accountID) > 0 && accountID[0] != "" && accountID[0] != tok.AccountID {
+		exists, err := DB.AssociationExists(u.conf.Name, tok.ID, accountID[0])
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			assoc := model.AccountUser{
+				UserID:    tok.ID,
+				AccountID: accountID[0],
+				Email:     tok.Email,
+				Role:      0,
+				Token:     DB.NewID(),
+			}
+			if _, err := DB.AddAccountUser(u.conf.Name, assoc); err != nil {
+				return "", err
+			}
+		}
+
 		assoc, err := DB.GetAccountUser(u.conf.Name, tok.ID, accountID[0])
 		if err != nil {
 			return "", errors.New("invalid email/password")

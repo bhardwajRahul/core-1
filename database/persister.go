@@ -87,6 +87,8 @@ type Persister interface {
 	RemoveUser(auth model.Auth, dbName, userID string) error
 
 	// cross-account user association functions
+	// AssociationExists checks if a user is already associated with an account
+	AssociationExists(dbName, userID, accountID string) (bool, error)
 	// AddAccountUser creates a cross-account membership for a user
 	AddAccountUser(dbName string, au model.AccountUser) (id string, err error)
 	// GetAccountUser returns an existing association by user and account

@@ -20,6 +20,19 @@ func (sl *SQLite) AddAccountUser(dbName string, au model.AccountUser) (id string
 	return
 }
 
+func (sl *SQLite) AssociationExists(dbName, userID, accountID string) (exists bool, err error) {
+	qry := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM %s_sb_account_users
+		WHERE user_id = $1 AND account_id = $2;
+	`, dbName)
+
+	var count int
+	err = sl.DB.QueryRow(qry, userID, accountID).Scan(&count)
+	exists = count > 0
+	return
+}
+
 func (sl *SQLite) GetAccountUser(dbName, userID, accountID string) (au model.AccountUser, err error) {
 	qry := fmt.Sprintf(`
 		SELECT id, user_id, account_id, email, role, token, created

@@ -89,6 +89,25 @@ func (mg *Mongo) AddAccountUser(dbName string, au model.AccountUser) (id string,
 	return
 }
 
+func (mg *Mongo) AssociationExists(dbName, userID, accountID string) (bool, error) {
+	db := mg.Client.Database(dbName)
+
+	uid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return false, err
+	}
+	aid, err := primitive.ObjectIDFromHex(accountID)
+	if err != nil {
+		return false, err
+	}
+
+	count, err := db.Collection("sb_account_users").CountDocuments(mg.Ctx, bson.M{"userId": uid, "accountId": aid})
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (mg *Mongo) GetAccountUser(dbName, userID, accountID string) (au model.AccountUser, err error) {
 	db := mg.Client.Database(dbName)
 

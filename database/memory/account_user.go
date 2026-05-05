@@ -14,6 +14,19 @@ func (m *Memory) AddAccountUser(dbName string, au model.AccountUser) (id string,
 	return
 }
 
+func (m *Memory) AssociationExists(dbName, userID, accountID string) (bool, error) {
+	all, err := all[model.AccountUser](m, dbName, "sb_account_users")
+	if err != nil {
+		return false, err
+	}
+
+	matches := filter(all, func(a model.AccountUser) bool {
+		return a.UserID == userID && a.AccountID == accountID
+	})
+
+	return len(matches) > 0, nil
+}
+
 func (m *Memory) GetAccountUser(dbName, userID, accountID string) (au model.AccountUser, err error) {
 	all, err := all[model.AccountUser](m, dbName, "sb_account_users")
 	if err != nil {

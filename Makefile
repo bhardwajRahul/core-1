@@ -78,11 +78,11 @@ test-services-up:
 
 test-services-wait:
 	@echo "Waiting for PostgreSQL..."
-	@timeout 60 sh -c 'until $(TEST_COMPOSE) exec -T db pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done'
+	@timeout 60 sh -c 'until cid=$$($(TEST_COMPOSE) ps -q db) && [ -n "$$cid" ] && [ "$$(docker inspect -f "{{.State.Health.Status}}" "$$cid" 2>/dev/null)" = "healthy" ]; do sleep 1; done' || ($(TEST_COMPOSE) ps; $(TEST_COMPOSE) logs db; false)
 	@echo "Waiting for MongoDB..."
-	@timeout 60 sh -c 'until $(TEST_COMPOSE) exec -T mongo mongo --quiet --eval "db.runCommand({ ping: 1 }).ok" >/dev/null 2>&1; do sleep 1; done'
+	@timeout 60 sh -c 'until cid=$$($(TEST_COMPOSE) ps -q mongo) && [ -n "$$cid" ] && [ "$$(docker inspect -f "{{.State.Health.Status}}" "$$cid" 2>/dev/null)" = "healthy" ]; do sleep 1; done' || ($(TEST_COMPOSE) ps; $(TEST_COMPOSE) logs mongo; false)
 	@echo "Waiting for Redis..."
-	@timeout 60 sh -c 'until $(TEST_COMPOSE) exec -T redis redis-cli ping >/dev/null 2>&1; do sleep 1; done'
+	@timeout 60 sh -c 'until cid=$$($(TEST_COMPOSE) ps -q redis) && [ -n "$$cid" ] && [ "$$(docker inspect -f "{{.State.Health.Status}}" "$$cid" 2>/dev/null)" = "healthy" ]; do sleep 1; done' || ($(TEST_COMPOSE) ps; $(TEST_COMPOSE) logs redis; false)
 
 test-services-down:
 	@$(TEST_COMPOSE) down --remove-orphans
