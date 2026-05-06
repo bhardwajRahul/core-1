@@ -354,6 +354,64 @@ func TestDBBulkDelete(t *testing.T) {
 	}
 }
 
+func TestDBQueryContainsOperator(t *testing.T) {
+	category := fmt.Sprintf("api-contains-operator-%d", time.Now().UnixNano())
+	tasks := []map[string]interface{}{
+		{"title": "Alpha Magic Needle", "done": false, "category": category},
+		{"title": "Plain haystack", "done": false, "category": category},
+		{"done": false, "category": category},
+		{"title": 12345, "done": false, "category": category},
+	}
+
+	resp := dbReq(t, db.bulkAdd, "POST", "/db/tasks/bulk", tasks)
+	defer resp.Body.Close()
+
+	if resp.StatusCode > 299 {
+		t.Fatal(GetResponseBody(t, resp))
+	}
+
+	clauses := [][]interface{}{
+		{"category", "=", category},
+		{"title", "contains", "magic needle"},
+	}
+
+	resp = dbReq(t, db.query, "POST", "/query/tasks", clauses)
+	defer resp.Body.Close()
+
+	if resp.StatusCode > 299 {
+		t.Fatal(GetResponseBody(t, resp))
+	}
+
+	var result model.PagedResult
+	if err := parseBody(resp.Body, &result); err != nil {
+		t.Fatal(err)
+	} else if result.Total != 1 {
+		t.Fatalf("expected contains total to be 1 got %d", result.Total)
+	} else if result.Results[0]["title"] != "Alpha Magic Needle" {
+		t.Fatalf("expected Alpha Magic Needle got %v", result.Results[0]["title"])
+	}
+
+	clauses = [][]interface{}{
+		{"category", "=", category},
+		{"title", "!contains", "needle"},
+	}
+
+	resp = dbReq(t, db.query, "POST", "/query/tasks", clauses)
+	defer resp.Body.Close()
+
+	if resp.StatusCode > 299 {
+		t.Fatal(GetResponseBody(t, resp))
+	}
+
+	if err := parseBody(resp.Body, &result); err != nil {
+		t.Fatal(err)
+	} else if result.Total != 1 {
+		t.Fatalf("expected !contains total to be 1 got %d", result.Total)
+	} else if result.Results[0]["title"] != "Plain haystack" {
+		t.Fatalf("expected Plain haystack got %v", result.Results[0]["title"])
+	}
+}
+
 func TestDBGetByIds(t *testing.T) {
 	var data []string
 

@@ -8,6 +8,11 @@ import (
 	"github.com/staticbackendhq/core/model"
 )
 
+type filterValue struct {
+	value string
+	like  bool
+}
+
 func (mg *PostgreSQL) ParseQuery(clauses [][]interface{}) (map[string]interface{}, error) {
 	filter := make(map[string]interface{})
 
@@ -43,6 +48,13 @@ func (mg *PostgreSQL) ParseQuery(clauses [][]interface{}) (map[string]interface{
 				field = " NOT " + field
 			}
 			filter[field] = clause[2]
+		case "contains", "!contains":
+			field = fmt.Sprintf(`jsonb_typeof(data->'%s') = 'string' AND data->>'%s' `, origField, origField)
+			if strings.HasPrefix(op, "!") {
+				field += "NOT "
+			}
+			field += "ILIKE "
+			filter[field] = filterValue{value: fmt.Sprintf("%v", clause[2]), like: true}
 		default:
 			return filter, fmt.Errorf("the %d query clause's operator: %s is not supported at the moment", i+1, op)
 		}
@@ -53,9 +65,29 @@ func (mg *PostgreSQL) ParseQuery(clauses [][]interface{}) (map[string]interface{
 
 func applyFilter(where string, filters map[string]interface{}) string {
 	for field, val := range filters {
-		where += fmt.Sprintf(" AND %s '%v'", field, val)
+		switch v := val.(type) {
+		case filterValue:
+			value := strings.ReplaceAll(v.value, "'", "''")
+			if v.like {
+				value = escapeLikePattern(value)
+				where += fmt.Sprintf(" AND %s '%s' ESCAPE '\\'", field, value)
+			} else {
+				where += fmt.Sprintf(" AND %s '%s'", field, value)
+			}
+		case string:
+			where += fmt.Sprintf(" AND %s '%s'", field, strings.ReplaceAll(v, "'", "''"))
+		default:
+			where += fmt.Sprintf(" AND %s '%v'", field, val)
+		}
 	}
 	return where
+}
+
+func escapeLikePattern(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return "%" + s + "%"
 }
 
 func secureRead(auth model.Auth, col string) string {

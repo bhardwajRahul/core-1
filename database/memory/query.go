@@ -46,6 +46,10 @@ func (m *Memory) ParseQuery(clauses [][]interface{}) (filter map[string]any, err
 			filter["in "+field] = fmt.Sprintf("in %s", clause[2])
 		case "!in", "nin":
 			filter[field] = clause[2]
+		case "contains":
+			filter["contains "+field] = clause[2]
+		case "!contains":
+			filter["!contains "+field] = clause[2]
 		default:
 			err = fmt.Errorf("the %d query clause's operator: %s is not supported at the moment", i+1, op)
 		}

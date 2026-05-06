@@ -319,3 +319,19 @@ func greaterThanEqual(v any, val any) bool {
 func lowerThanEqual(v any, val any) bool {
 	return fmt.Sprintf("%v", v) <= fmt.Sprintf("%v", val)
 }
+
+func contains(v any, val any) bool {
+	s, ok := v.(string)
+	if !ok {
+		return false
+	}
+	return strings.Contains(strings.ToLower(s), strings.ToLower(fmt.Sprintf("%v", val)))
+}
+
+func notContains(v any, val any) bool {
+	s, ok := v.(string)
+	if !ok {
+		return false
+	}
+	return !strings.Contains(strings.ToLower(s), strings.ToLower(fmt.Sprintf("%v", val)))
+}

@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/staticbackendhq/core/internal"
@@ -43,6 +44,10 @@ func (mg *Mongo) ParseQuery(clauses [][]interface{}) (map[string]interface{}, er
 			filter[field] = bson.M{"$in": clause[2]}
 		case "!in", "nin":
 			filter[field] = bson.M{"$nin": clause[2]}
+		case "contains":
+			filter[field] = bson.M{"$type": "string", "$regex": regexp.QuoteMeta(fmt.Sprintf("%v", clause[2])), "$options": "i"}
+		case "!contains":
+			filter[field] = bson.M{"$type": "string", "$not": primitive.Regex{Pattern: regexp.QuoteMeta(fmt.Sprintf("%v", clause[2])), Options: "i"}}
 		default:
 			return filter, fmt.Errorf("the %d query clause's operator: %s is not supported at the moment", i+1, op)
 		}

@@ -367,6 +367,59 @@ func TesDeleteDocuments(t *testing.T) {
 	}
 }
 
+func TestQueryWithContainsOperator(t *testing.T) {
+	category := fmt.Sprintf("contains-operator-%d", time.Now().UnixNano())
+	docs := []interface{}{
+		map[string]interface{}{"title": "Alpha Magic Needle", "done": false, "category": category},
+		map[string]interface{}{"title": "Plain haystack", "done": false, "category": category},
+		map[string]interface{}{"done": false, "category": category},
+		map[string]interface{}{"title": 12345, "done": false, "category": category},
+	}
+
+	if err := datastore.BulkCreateDocument(adminAuth, confDBName, "contains_tasks", docs); err != nil {
+		t.Fatal(err)
+	}
+
+	lp := model.ListParams{Page: 1, Size: 10}
+	clauses := [][]interface{}{
+		{"category", "=", category},
+		{"title", "contains", "magic needle"},
+	}
+
+	filters, err := datastore.ParseQuery(clauses)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := datastore.QueryDocuments(adminAuth, confDBName, "contains_tasks", filters, lp)
+	if err != nil {
+		t.Fatal(err)
+	} else if result.Total != 1 {
+		t.Fatalf("expected contains total to be 1 got %d", result.Total)
+	} else if result.Results[0]["title"] != "Alpha Magic Needle" {
+		t.Fatalf("expected Alpha Magic Needle got %v", result.Results[0]["title"])
+	}
+
+	clauses = [][]interface{}{
+		{"category", "=", category},
+		{"title", "!contains", "needle"},
+	}
+
+	filters, err = datastore.ParseQuery(clauses)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err = datastore.QueryDocuments(adminAuth, confDBName, "contains_tasks", filters, lp)
+	if err != nil {
+		t.Fatal(err)
+	} else if result.Total != 1 {
+		t.Fatalf("expected !contains total to be 1 got %d", result.Total)
+	} else if result.Results[0]["title"] != "Plain haystack" {
+		t.Fatalf("expected Plain haystack got %v", result.Results[0]["title"])
+	}
+}
+
 func TestListCollections(t *testing.T) {
 	results, err := datastore.ListCollections(confDBName)
 	if err != nil {

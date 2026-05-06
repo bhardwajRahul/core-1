@@ -183,6 +183,14 @@ func filterByClauses(list []map[string]any, filter map[string]any) (filtered []m
 				if lowerThanEqual(doc[field], v) {
 					matches++
 				}
+			case "contains":
+				if contains(doc[field], v) {
+					matches++
+				}
+			case "!contains":
+				if notContains(doc[field], v) {
+					matches++
+				}
 			}
 		}
 

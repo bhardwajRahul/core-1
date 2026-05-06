@@ -8,6 +8,11 @@ import (
 	"github.com/staticbackendhq/core/model"
 )
 
+type filterValue struct {
+	value string
+	like  bool
+}
+
 func (sl *SQLite) ParseQuery(clauses [][]interface{}) (map[string]interface{}, error) {
 	filter := make(map[string]interface{})
 
@@ -44,6 +49,13 @@ func (sl *SQLite) ParseQuery(clauses [][]interface{}) (map[string]interface{}, e
 				field = " NOT " + field
 			}
 			filter[field+" "] = clause[2]
+		case "contains", "!contains":
+			field = fmt.Sprintf(`json_type(data, "$.%s") = 'text' AND json_extract(data, "$.%s") `, origField, origField)
+			if strings.HasPrefix(op, "!") {
+				field += "NOT "
+			}
+			field += "LIKE "
+			filter[field] = filterValue{value: fmt.Sprintf("%v", clause[2]), like: true}
 		default:
 			return filter, fmt.Errorf("the %d query clause's operator: %s is not supported at the moment", i+1, op)
 		}
@@ -54,7 +66,15 @@ func (sl *SQLite) ParseQuery(clauses [][]interface{}) (map[string]interface{}, e
 
 func applyFilter(where string, filters map[string]interface{}) string {
 	for field, val := range filters {
-		if s, ok := val.(string); ok {
+		if v, ok := val.(filterValue); ok {
+			s := strings.Replace(v.value, "'", "''", -1)
+			if v.like {
+				s = escapeLikePattern(s)
+				where += fmt.Sprintf(" AND %s '%s' ESCAPE '\\'", field, s)
+			} else {
+				where += fmt.Sprintf(" AND %s '%s'", field, s)
+			}
+		} else if s, ok := val.(string); ok {
 			s = strings.Replace(s, "'", "''", -1)
 			where += fmt.Sprintf(" AND %s '%v'", field, s)
 		} else if list, ok := val.([]string); ok {
@@ -73,6 +93,13 @@ func applyFilter(where string, filters map[string]interface{}) string {
 		}
 	}
 	return where
+}
+
+func escapeLikePattern(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return "%" + s + "%"
 }
 
 func secureRead(auth model.Auth, col string) string {
