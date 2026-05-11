@@ -67,6 +67,13 @@ func (m *Memory) CreateIndex(dbName, col, field string) error {
 	return nil
 }
 
+func (m *Memory) CreateTypedIndex(dbName, col, field string, typ database.IndexType) error {
+	if !database.IsSupportedIndexType(typ) {
+		return fmt.Errorf("index type %q is not supported", typ)
+	}
+	return nil
+}
+
 func mustEnc(v any) []byte {
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(v); err != nil {
@@ -271,7 +278,8 @@ func operandValue(doc map[string]any, operand sbquery.Operand) any {
 }
 
 func compare(v any, val any, typ sbquery.ValueType, fn func(int) bool) bool {
-	if typ == sbquery.TypeNumber {
+	switch typ {
+	case sbquery.TypeNumber:
 		left, ok := number(v)
 		if !ok {
 			return false
@@ -284,6 +292,23 @@ func compare(v any, val any, typ sbquery.ValueType, fn func(int) bool) bool {
 		case left < right:
 			return fn(-1)
 		case left > right:
+			return fn(1)
+		default:
+			return fn(0)
+		}
+	case sbquery.TypeBoolean:
+		left, ok := boolean(v)
+		if !ok {
+			return false
+		}
+		right, ok := boolean(val)
+		if !ok {
+			return false
+		}
+		switch {
+		case !left && right:
+			return fn(-1)
+		case left && !right:
 			return fn(1)
 		default:
 			return fn(0)
@@ -323,6 +348,21 @@ func number(v any) (float64, bool) {
 		f, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64)
 		return f, err == nil
 	}
+}
+
+func boolean(v any) (bool, bool) {
+	switch b := v.(type) {
+	case bool:
+		return b, true
+	case string:
+		switch strings.ToLower(b) {
+		case "true":
+			return true, true
+		case "false":
+			return false, true
+		}
+	}
+	return false, false
 }
 
 func in(v any, val any) bool {

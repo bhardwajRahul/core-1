@@ -32,6 +32,38 @@ func TestParseTypedLiteral(t *testing.T) {
 	}
 }
 
+func TestParseInfersTypedLiterals(t *testing.T) {
+	q, err := Parse([][]interface{}{
+		{"count", "==", 23},
+		{"done", "==", true},
+		{"visible", "==", map[string]any{"$value": false}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q[0].Value.Type != TypeNumber {
+		t.Fatalf("expected number type got %q", q[0].Value.Type)
+	}
+	if q[1].Value.Type != TypeBoolean {
+		t.Fatalf("expected boolean type got %q", q[1].Value.Type)
+	}
+	if q[2].Value.Type != TypeBoolean {
+		t.Fatalf("expected boolean $value type got %q", q[2].Value.Type)
+	}
+}
+
+func TestParseBooleanFieldReference(t *testing.T) {
+	q, err := Parse([][]interface{}{
+		{"enabled", "==", map[string]any{"$field": "active", "$type": "boolean"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q[0].Value.Kind != OperandField || q[0].Value.Field != "active" || q[0].Value.Type != TypeBoolean {
+		t.Fatalf("unexpected operand: %#v", q[0].Value)
+	}
+}
+
 func TestParseRejectsFieldReferenceForContains(t *testing.T) {
 	_, err := Parse([][]interface{}{
 		{"title", "contains", map[string]any{"$field": "otherTitle"}},

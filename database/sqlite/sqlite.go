@@ -62,3 +62,10 @@ func (sl *SQLite) CreateIndex(dbName, col, field string) error {
 	*/
 	return nil
 }
+
+func (sl *SQLite) CreateTypedIndex(dbName, col, field string, typ database.IndexType) error {
+	if !database.IsSupportedIndexType(typ) {
+		return fmt.Errorf("index type %q is not supported", typ)
+	}
+	return nil
+}

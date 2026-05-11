@@ -60,18 +60,38 @@ func buildClause(clause sbquery.Clause, startAt int) (string, []any) {
 
 func fieldExpr(field string, typ sbquery.ValueType) string {
 	expr := fmt.Sprintf("data->>'%s'", field)
-	if typ == sbquery.TypeNumber {
-		return fmt.Sprintf("(CASE WHEN %s ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN %s::numeric END)", expr, expr)
+	switch typ {
+	case sbquery.TypeNumber:
+		return numericFieldExpr(field)
+	case sbquery.TypeBoolean:
+		return booleanFieldExpr(field)
 	}
 	return expr
+}
+
+func stringFieldExpr(field string) string {
+	return fmt.Sprintf("data->>'%s'", field)
+}
+
+func numericFieldExpr(field string) string {
+	expr := stringFieldExpr(field)
+	return fmt.Sprintf("(CASE WHEN %s ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (%s)::numeric END)", expr, expr)
+}
+
+func booleanFieldExpr(field string) string {
+	expr := stringFieldExpr(field)
+	return fmt.Sprintf("(CASE WHEN jsonb_typeof(data->'%s') = 'boolean' OR lower(%s) IN ('true', 'false') THEN (%s)::boolean END)", field, expr, expr)
 }
 
 func operandExpr(operand sbquery.Operand, startAt int) (string, []any) {
 	if operand.Kind == sbquery.OperandField {
 		return fieldExpr(operand.Field, operand.Type), nil
 	}
-	if operand.Type == sbquery.TypeNumber {
+	switch operand.Type {
+	case sbquery.TypeNumber:
 		return fmt.Sprintf("$%d::numeric", startAt), []any{operand.Value}
+	case sbquery.TypeBoolean:
+		return fmt.Sprintf("$%d::boolean", startAt), []any{operand.Value}
 	}
 	return fmt.Sprintf("$%d", startAt), []any{fmt.Sprintf("%v", operand.Value)}
 }

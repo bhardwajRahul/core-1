@@ -10,6 +10,7 @@ import (
 
 	"github.com/staticbackendhq/core/backend"
 	"github.com/staticbackendhq/core/cache"
+	dbpkg "github.com/staticbackendhq/core/database"
 	"github.com/staticbackendhq/core/logger"
 	"github.com/staticbackendhq/core/middleware"
 	"github.com/staticbackendhq/core/model"
@@ -454,6 +455,26 @@ func (database *Database) index(w http.ResponseWriter, r *http.Request) {
 
 	col := r.URL.Query().Get("col")
 	field := r.URL.Query().Get("field")
+	indexType := dbpkg.IndexType(r.URL.Query().Get("type"))
+
+	if indexType != dbpkg.IndexTypeDefault {
+		typed, ok := backend.DB.(dbpkg.TypedIndexer)
+		if !ok {
+			http.Error(w, "typed indexes are not supported by this database provider", http.StatusBadRequest)
+			return
+		}
+		if err := typed.CreateTypedIndex(conf.Name, col, field, indexType); err != nil {
+			status := http.StatusInternalServerError
+			if !dbpkg.IsSupportedIndexType(indexType) {
+				status = http.StatusBadRequest
+			}
+			http.Error(w, err.Error(), status)
+			return
+		}
+
+		respond(w, http.StatusOK, true)
+		return
+	}
 
 	if err := backend.DB.CreateIndex(conf.Name, col, field); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

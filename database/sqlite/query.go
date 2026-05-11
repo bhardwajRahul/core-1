@@ -75,8 +75,11 @@ func buildClause(clause sbquery.Clause, startAt int) (string, []any) {
 
 func fieldExpr(field string, typ sbquery.ValueType) string {
 	expr := fmt.Sprintf("json_extract(data, \"$.%s\")", field)
-	if typ == sbquery.TypeNumber {
+	switch typ {
+	case sbquery.TypeNumber:
 		return fmt.Sprintf("CAST(%s AS REAL)", expr)
+	case sbquery.TypeBoolean:
+		return fmt.Sprintf("(CASE WHEN json_type(data, \"$.%s\") IN ('true', 'false') THEN CAST(%s AS INTEGER) END)", field, expr)
 	}
 	return expr
 }
@@ -85,8 +88,11 @@ func operandExpr(operand sbquery.Operand, startAt int) (string, []any) {
 	if operand.Kind == sbquery.OperandField {
 		return fieldExpr(operand.Field, operand.Type), nil
 	}
-	if operand.Type == sbquery.TypeNumber {
+	switch operand.Type {
+	case sbquery.TypeNumber:
 		return fmt.Sprintf("CAST($%d AS REAL)", startAt), []any{operand.Value}
+	case sbquery.TypeBoolean:
+		return fmt.Sprintf("CAST($%d AS INTEGER)", startAt), []any{operand.Value}
 	}
 	return fmt.Sprintf("$%d", startAt), []any{operand.Value}
 }

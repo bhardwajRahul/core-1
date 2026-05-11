@@ -1,9 +1,11 @@
 package query
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 )
 
 const FilterKey = "__sb_query__"
@@ -28,6 +30,7 @@ type ValueType string
 const (
 	TypeDefault ValueType = ""
 	TypeNumber  ValueType = "number"
+	TypeBoolean ValueType = "boolean"
 )
 
 type OperandKind int
@@ -143,7 +146,7 @@ func ParseOperand(v any) (Operand, error) {
 		}
 	}
 	if !ok {
-		return Operand{Kind: OperandLiteral, Value: v}, nil
+		return Operand{Kind: OperandLiteral, Value: v, Type: InferValueType(v)}, nil
 	}
 
 	typ, err := parseType(m["$type"])
@@ -163,10 +166,13 @@ func ParseOperand(v any) (Operand, error) {
 	}
 
 	if value, ok := m["$value"]; ok {
+		if typ == TypeDefault {
+			typ = InferValueType(value)
+		}
 		return Operand{Kind: OperandLiteral, Value: value, Type: typ}, nil
 	}
 
-	return Operand{Kind: OperandLiteral, Value: v}, nil
+	return Operand{Kind: OperandLiteral, Value: v, Type: InferValueType(v)}, nil
 }
 
 func ValidateField(field string) error {
@@ -194,11 +200,25 @@ func parseType(v any) (ValueType, error) {
 		return "", errors.New("$type must be a string")
 	}
 	switch ValueType(s) {
-	case TypeDefault, TypeNumber:
+	case TypeDefault, TypeNumber, TypeBoolean:
 		return ValueType(s), nil
 	default:
 		return "", fmt.Errorf("$type %q is not supported", s)
 	}
+}
+
+func InferValueType(v any) ValueType {
+	switch val := v.(type) {
+	case bool:
+		return TypeBoolean
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+		return TypeNumber
+	case json.Number:
+		if _, err := strconv.ParseFloat(string(val), 64); err == nil {
+			return TypeNumber
+		}
+	}
+	return TypeDefault
 }
 
 func supportsFieldOperand(op Operator) bool {

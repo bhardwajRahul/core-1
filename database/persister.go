@@ -10,6 +10,27 @@ const (
 	DataStoreMemory     = "memory"
 )
 
+type IndexType string
+
+const (
+	IndexTypeDefault IndexType = ""
+	IndexTypeNumber  IndexType = "number"
+	IndexTypeBoolean IndexType = "boolean"
+)
+
+type TypedIndexer interface {
+	CreateTypedIndex(dbName, col, field string, typ IndexType) error
+}
+
+func IsSupportedIndexType(typ IndexType) bool {
+	switch typ {
+	case IndexTypeDefault, IndexTypeNumber, IndexTypeBoolean:
+		return true
+	default:
+		return false
+	}
+}
+
 // Persister used for anything that persists to the database
 type Persister interface {
 	// Ping sends a ping to the db engine

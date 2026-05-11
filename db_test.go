@@ -537,6 +537,57 @@ func TestDBCreateIndex(t *testing.T) {
 	// but there's no way to get a collection's indexes for now.
 }
 
+func TestDBCreateTypedIndex(t *testing.T) {
+	req := httptest.NewRequest("POST", "/sudo/index?col=tasks&field=done&type=boolean", nil)
+	w := httptest.NewRecorder()
+
+	req.Header.Set("SB-PUBLIC-KEY", pubKey)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rootToken))
+
+	stdRoot := []middleware.Middleware{
+		middleware.WithDB(backend.DB, backend.Cache, getStripePortalURL),
+		middleware.RequireRoot(backend.DB, backend.Cache),
+	}
+	h := middleware.Chain(http.HandlerFunc(db.index), stdRoot...)
+
+	h.ServeHTTP(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode > 299 {
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		t.Errorf("got error creating typed index: %s", string(b))
+	}
+}
+
+func TestDBCreateTypedIndexRejectsUnsupportedType(t *testing.T) {
+	req := httptest.NewRequest("POST", "/sudo/index?col=tasks&field=done&type=date", nil)
+	w := httptest.NewRecorder()
+
+	req.Header.Set("SB-PUBLIC-KEY", pubKey)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rootToken))
+
+	stdRoot := []middleware.Middleware{
+		middleware.WithDB(backend.DB, backend.Cache, getStripePortalURL),
+		middleware.RequireRoot(backend.DB, backend.Cache),
+	}
+	h := middleware.Chain(http.HandlerFunc(db.index), stdRoot...)
+
+	h.ServeHTTP(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400 got %d", resp.StatusCode)
+	}
+}
+
 func TestDBSearchIndexAndQuery(t *testing.T) {
 	task :=
 		Task{
