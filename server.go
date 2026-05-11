@@ -222,6 +222,7 @@ func Start(c config.AppConfig, log *logger.Logger) {
 	http.Handle("/fn/delete/", middleware.Chain(http.HandlerFunc(f.del), stdRoot...))
 	http.Handle("/fn/del/", middleware.Chain(http.HandlerFunc(f.del), stdRoot...))
 	http.Handle("/fn/info/", middleware.Chain(http.HandlerFunc(f.info), stdRoot...))
+	http.Handle("/fn/sudoexec/", middleware.Chain(http.HandlerFunc(f.exec), stdRoot...))
 	http.Handle("/fn/exec/", middleware.Chain(http.HandlerFunc(f.exec), stdAuth...))
 	http.Handle("/fn", middleware.Chain(http.HandlerFunc(f.list), stdRoot...))
 
