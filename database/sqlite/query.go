@@ -5,82 +5,113 @@ import (
 	"strings"
 
 	"github.com/staticbackendhq/core/internal"
+	sbquery "github.com/staticbackendhq/core/internal/query"
 	"github.com/staticbackendhq/core/model"
 )
 
-type filterValue struct {
-	value string
-	like  bool
+func (sl *SQLite) ParseQuery(clauses [][]interface{}) (map[string]interface{}, error) {
+	q, err := sbquery.Parse(clauses)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{sbquery.FilterKey: q}, nil
 }
 
-func (sl *SQLite) ParseQuery(clauses [][]interface{}) (map[string]interface{}, error) {
-	filter := make(map[string]interface{})
-
-	for i, clause := range clauses {
-		if len(clause) != 3 {
-			return filter, fmt.Errorf("the %d query clause did not contains the required 3 parameters (field, operator, value)", i+1)
-		}
-
-		field, ok := clause[0].(string)
-		if !ok {
-			return filter, fmt.Errorf("the %d query clause's field parameter must be a string: %v", i+1, clause[0])
-		}
-
-		origField := field
-
-		field = fmt.Sprintf(`json_extract(data, "$.%s")`, field)
-
-		op, ok := clause[1].(string)
-		if !ok {
-			return filter, fmt.Errorf("the %d query clause's operator must be a string: %v", i+1, clause[1])
-		}
-
-		switch op {
-		case "=", "==":
-			filter[field+" = "] = clause[2]
-		case "!=", "<>":
-			filter[field+" != "] = clause[2]
-		case ">", "<", ">=", "<=":
-			filter[field+" "+op+" "] = clause[2]
-		case "in", "!in":
-			field = fmt.Sprintf(`EXISTS (SELECT 1 FROM json_each(json_extract(data, "$.%s")) WHERE value IN (_in_))`, origField)
-
-			if strings.HasPrefix(op, "!") {
-				field = " NOT " + field
-			}
-			filter[field+" "] = clause[2]
-		case "contains", "!contains":
-			field = fmt.Sprintf(`json_type(data, "$.%s") = 'text' AND json_extract(data, "$.%s") `, origField, origField)
-			if strings.HasPrefix(op, "!") {
-				field += "NOT "
-			}
-			field += "LIKE "
-			filter[field] = filterValue{value: fmt.Sprintf("%v", clause[2]), like: true}
-		default:
-			return filter, fmt.Errorf("the %d query clause's operator: %s is not supported at the moment", i+1, op)
-		}
+func applyFilter(where string, filters map[string]interface{}, startAt int) (string, []any) {
+	q, ok := sbquery.FromFilter(filters)
+	if !ok {
+		return applyLegacyFilter(where, filters), nil
 	}
 
-	return filter, nil
+	args := make([]any, 0, len(q))
+	next := startAt
+	for _, clause := range q {
+		fragment, values := buildClause(clause, next)
+		next += len(values)
+		args = append(args, values...)
+		where += " AND " + fragment
+	}
+	return where, args
 }
 
-func applyFilter(where string, filters map[string]interface{}) string {
-	for field, val := range filters {
-		if v, ok := val.(filterValue); ok {
-			s := strings.Replace(v.value, "'", "''", -1)
-			if v.like {
-				s = escapeLikePattern(s)
-				where += fmt.Sprintf(" AND %s '%s' ESCAPE '\\'", field, s)
-			} else {
-				where += fmt.Sprintf(" AND %s '%s'", field, s)
+func buildClause(clause sbquery.Clause, startAt int) (string, []any) {
+	left := fieldExpr(clause.Field, clause.Value.Type)
+
+	switch clause.Operator {
+	case sbquery.OpEqual, sbquery.OpNotEqual, sbquery.OpGreater, sbquery.OpLower, sbquery.OpGreaterEq, sbquery.OpLowerEq:
+		right, args := operandExpr(clause.Value, startAt)
+		return fmt.Sprintf("%s %s %s", left, clause.Operator, right), args
+	case sbquery.OpIn, sbquery.OpNotIn:
+		list := listValues(clause.Value.Value)
+		if len(list) == 0 {
+			if clause.Operator == sbquery.OpNotIn {
+				return "TRUE", nil
 			}
-		} else if s, ok := val.(string); ok {
+			return "FALSE", nil
+		}
+		placeholders := make([]string, 0, len(list))
+		args := make([]any, 0, len(list))
+		for i, item := range list {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", startAt+i))
+			args = append(args, item)
+		}
+		not := ""
+		if clause.Operator == sbquery.OpNotIn {
+			not = "NOT "
+		}
+		return fmt.Sprintf("%sEXISTS (SELECT 1 FROM json_each(json_extract(data, \"$.%s\")) WHERE value IN (%s))",
+			not, clause.Field, strings.Join(placeholders, ", ")), args
+	case sbquery.OpContains, sbquery.OpNotContains:
+		not := ""
+		if clause.Operator == sbquery.OpNotContains {
+			not = "NOT "
+		}
+		return fmt.Sprintf("json_type(data, \"$.%s\") = 'text' AND json_extract(data, \"$.%s\") %sLIKE $%d ESCAPE '\\'",
+			clause.Field, clause.Field, not, startAt), []any{escapeLikePattern(fmt.Sprintf("%v", clause.Value.Value))}
+	default:
+		return "TRUE", nil
+	}
+}
+
+func fieldExpr(field string, typ sbquery.ValueType) string {
+	expr := fmt.Sprintf("json_extract(data, \"$.%s\")", field)
+	if typ == sbquery.TypeNumber {
+		return fmt.Sprintf("CAST(%s AS REAL)", expr)
+	}
+	return expr
+}
+
+func operandExpr(operand sbquery.Operand, startAt int) (string, []any) {
+	if operand.Kind == sbquery.OperandField {
+		return fieldExpr(operand.Field, operand.Type), nil
+	}
+	if operand.Type == sbquery.TypeNumber {
+		return fmt.Sprintf("CAST($%d AS REAL)", startAt), []any{operand.Value}
+	}
+	return fmt.Sprintf("$%d", startAt), []any{operand.Value}
+}
+
+func listValues(v any) []any {
+	switch list := v.(type) {
+	case []any:
+		return list
+	case []string:
+		values := make([]any, 0, len(list))
+		for _, item := range list {
+			values = append(values, item)
+		}
+		return values
+	default:
+		return []any{v}
+	}
+}
+
+func applyLegacyFilter(where string, filters map[string]interface{}) string {
+	for field, val := range filters {
+		if s, ok := val.(string); ok {
 			s = strings.Replace(s, "'", "''", -1)
 			where += fmt.Sprintf(" AND %s '%v'", field, s)
 		} else if list, ok := val.([]string); ok {
-			//TODO: this is dirty as F, just to make the in and !in operator tests pass
-			// this will need lots of thinking and refactoring
-
 			var s string
 			for _, item := range list {
 				s += fmt.Sprintf("'%s', ", strings.Replace(item, "'", "''", -1))

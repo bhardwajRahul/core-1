@@ -5,75 +5,80 @@ import (
 	"strings"
 
 	"github.com/staticbackendhq/core/internal"
+	sbquery "github.com/staticbackendhq/core/internal/query"
 	"github.com/staticbackendhq/core/model"
 )
 
-type filterValue struct {
-	value string
-	like  bool
+func (pg *PostgreSQL) ParseQuery(clauses [][]interface{}) (map[string]interface{}, error) {
+	q, err := sbquery.Parse(clauses)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{sbquery.FilterKey: q}, nil
 }
 
-func (mg *PostgreSQL) ParseQuery(clauses [][]interface{}) (map[string]interface{}, error) {
-	filter := make(map[string]interface{})
-
-	for i, clause := range clauses {
-		if len(clause) != 3 {
-			return filter, fmt.Errorf("the %d query clause did not contains the required 3 parameters (field, operator, value)", i+1)
-		}
-
-		field, ok := clause[0].(string)
-		if !ok {
-			return filter, fmt.Errorf("the %d query clause's field parameter must be a string: %v", i+1, clause[0])
-		}
-
-		origField := field
-
-		field = fmt.Sprintf(`data->>'%s'`, field)
-
-		op, ok := clause[1].(string)
-		if !ok {
-			return filter, fmt.Errorf("the %d query clause's operator must be a string: %v", i+1, clause[1])
-		}
-
-		switch op {
-		case "=", "==":
-			filter[field+" = "] = clause[2]
-		case "!=", "<>":
-			filter[field+" != "] = clause[2]
-		case ">", "<", ">=", "<=":
-			filter[field+" "+op+" "] = clause[2]
-		case "in", "!in":
-			field = fmt.Sprintf("data->'%s' ? ", origField)
-			if strings.HasPrefix(op, "!") {
-				field = " NOT " + field
-			}
-			filter[field] = clause[2]
-		case "contains", "!contains":
-			field = fmt.Sprintf(`jsonb_typeof(data->'%s') = 'string' AND data->>'%s' `, origField, origField)
-			if strings.HasPrefix(op, "!") {
-				field += "NOT "
-			}
-			field += "ILIKE "
-			filter[field] = filterValue{value: fmt.Sprintf("%v", clause[2]), like: true}
-		default:
-			return filter, fmt.Errorf("the %d query clause's operator: %s is not supported at the moment", i+1, op)
-		}
+func applyFilter(where string, filters map[string]interface{}, startAt int) (string, []any) {
+	q, ok := sbquery.FromFilter(filters)
+	if !ok {
+		return applyLegacyFilter(where, filters), nil
 	}
 
-	return filter, nil
+	args := make([]any, 0, len(q))
+	next := startAt
+	for _, clause := range q {
+		fragment, values := buildClause(clause, next)
+		next += len(values)
+		args = append(args, values...)
+		where += " AND " + fragment
+	}
+	return where, args
 }
 
-func applyFilter(where string, filters map[string]interface{}) string {
+func buildClause(clause sbquery.Clause, startAt int) (string, []any) {
+	left := fieldExpr(clause.Field, clause.Value.Type)
+
+	switch clause.Operator {
+	case sbquery.OpEqual, sbquery.OpNotEqual, sbquery.OpGreater, sbquery.OpLower, sbquery.OpGreaterEq, sbquery.OpLowerEq:
+		right, args := operandExpr(clause.Value, startAt)
+		return fmt.Sprintf("%s %s %s", left, clause.Operator, right), args
+	case sbquery.OpIn, sbquery.OpNotIn:
+		if clause.Operator == sbquery.OpNotIn {
+			return fmt.Sprintf("NOT data->'%s' ? $%d", clause.Field, startAt), []any{fmt.Sprintf("%v", clause.Value.Value)}
+		}
+		return fmt.Sprintf("data->'%s' ? $%d", clause.Field, startAt), []any{fmt.Sprintf("%v", clause.Value.Value)}
+	case sbquery.OpContains, sbquery.OpNotContains:
+		not := ""
+		if clause.Operator == sbquery.OpNotContains {
+			not = "NOT "
+		}
+		return fmt.Sprintf("jsonb_typeof(data->'%s') = 'string' AND data->>'%s' %sILIKE $%d ESCAPE '\\'", clause.Field, clause.Field, not, startAt),
+			[]any{escapeLikePattern(fmt.Sprintf("%v", clause.Value.Value))}
+	default:
+		return "TRUE", nil
+	}
+}
+
+func fieldExpr(field string, typ sbquery.ValueType) string {
+	expr := fmt.Sprintf("data->>'%s'", field)
+	if typ == sbquery.TypeNumber {
+		return fmt.Sprintf("(CASE WHEN %s ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN %s::numeric END)", expr, expr)
+	}
+	return expr
+}
+
+func operandExpr(operand sbquery.Operand, startAt int) (string, []any) {
+	if operand.Kind == sbquery.OperandField {
+		return fieldExpr(operand.Field, operand.Type), nil
+	}
+	if operand.Type == sbquery.TypeNumber {
+		return fmt.Sprintf("$%d::numeric", startAt), []any{operand.Value}
+	}
+	return fmt.Sprintf("$%d", startAt), []any{fmt.Sprintf("%v", operand.Value)}
+}
+
+func applyLegacyFilter(where string, filters map[string]interface{}) string {
 	for field, val := range filters {
 		switch v := val.(type) {
-		case filterValue:
-			value := strings.ReplaceAll(v.value, "'", "''")
-			if v.like {
-				value = escapeLikePattern(value)
-				where += fmt.Sprintf(" AND %s '%s' ESCAPE '\\'", field, value)
-			} else {
-				where += fmt.Sprintf(" AND %s '%s'", field, value)
-			}
 		case string:
 			where += fmt.Sprintf(" AND %s '%s'", field, strings.ReplaceAll(v, "'", "''"))
 		default:

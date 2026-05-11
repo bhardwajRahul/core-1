@@ -1,61 +1,20 @@
 package memory
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/staticbackendhq/core/internal"
+	sbquery "github.com/staticbackendhq/core/internal/query"
 	"github.com/staticbackendhq/core/model"
 )
 
 func (m *Memory) ParseQuery(clauses [][]interface{}) (filter map[string]any, err error) {
-	filter = make(map[string]any)
-
-	for i, clause := range clauses {
-		if len(clause) != 3 {
-			err = fmt.Errorf("the %d query clause did not contains the required 3 parameters (field, operator, value)", i+1)
-			return
-		}
-
-		field, ok := clause[0].(string)
-		if !ok {
-			err = fmt.Errorf("the %d query clause's field parameter must be a string: %v", i+1, clause[0])
-			return
-		}
-
-		op, ok := clause[1].(string)
-		if !ok {
-			err = fmt.Errorf("the %d query clause's operator must be a string: %v", i+1, clause[1])
-			return
-		}
-
-		switch op {
-		case "=", "==":
-			filter["= "+field] = clause[2]
-		case "!=", "<>":
-			filter["!= "+field] = clause[2]
-		case ">":
-			filter["> "+field] = clause[2]
-		case "<":
-			filter["< "+field] = clause[2]
-		case ">=":
-			filter[">= "+field] = clause[2]
-		case "<=":
-			filter["<= "+field] = clause[2]
-		case "in":
-			filter["in "+field] = fmt.Sprintf("in %s", clause[2])
-		case "!in", "nin":
-			filter[field] = clause[2]
-		case "contains":
-			filter["contains "+field] = clause[2]
-		case "!contains":
-			filter["!contains "+field] = clause[2]
-		default:
-			err = fmt.Errorf("the %d query clause's operator: %s is not supported at the moment", i+1, op)
-		}
+	q, err := sbquery.Parse(clauses)
+	if err != nil {
+		return nil, err
 	}
 
-	return
+	return map[string]any{sbquery.FilterKey: q}, nil
 }
 
 func secureRead(auth model.Auth, col string, list []map[string]any) []map[string]any {

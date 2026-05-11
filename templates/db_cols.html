@@ -92,8 +92,9 @@
 							<li>A clause is an array <code>["field", "operator", "value"]</code></li>
 							<li>Use proper JavaScript type: <conde>["isActive", "=", true]</conde>
 							</li>
+							<li>Compare against another field with <code>["inventory", "&lt;=", {"$field":"inventoryThreshold", "$type":"number"}]</code></li>
 							<li>Wrap all your clauses into a parent array: <code>[["field", "=", "value"], ["field2"...]]</code></li>
-							<li>Available operators: =, !=, &lt;, &gt; &lt;=, &gt;=, in, !in</li>
+							<li>Available operators: =, !=, &lt;, &gt; &lt;=, &gt;=, in, !in, contains, !contains</li>
 						</ul>
 					</div>
 				</div>

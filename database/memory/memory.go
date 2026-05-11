@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/staticbackendhq/core/cache"
 	"github.com/staticbackendhq/core/database"
+	sbquery "github.com/staticbackendhq/core/internal/query"
 )
 
 /*const (
@@ -154,6 +156,15 @@ func filter[T any](list []T, fn func(x T) bool) []T {
 }
 
 func filterByClauses(list []map[string]any, filter map[string]any) (filtered []map[string]any) {
+	if q, ok := sbquery.FromFilter(filter); ok {
+		for _, doc := range list {
+			if matchQuery(doc, q) {
+				filtered = append(filtered, doc)
+			}
+		}
+		return
+	}
+
 	for _, doc := range list {
 		matches := 0
 		for k, v := range filter {
@@ -199,6 +210,139 @@ func filterByClauses(list []map[string]any, filter map[string]any) (filtered []m
 		}
 	}
 	return
+}
+
+func matchQuery(doc map[string]any, q sbquery.Query) bool {
+	for _, clause := range q {
+		left := doc[clause.Field]
+		right := operandValue(doc, clause.Value)
+
+		switch clause.Operator {
+		case sbquery.OpEqual:
+			if !equal(left, right) {
+				return false
+			}
+		case sbquery.OpNotEqual:
+			if !notEqual(left, right) {
+				return false
+			}
+		case sbquery.OpGreater:
+			if !compare(left, right, clause.Value.Type, func(c int) bool { return c > 0 }) {
+				return false
+			}
+		case sbquery.OpLower:
+			if !compare(left, right, clause.Value.Type, func(c int) bool { return c < 0 }) {
+				return false
+			}
+		case sbquery.OpGreaterEq:
+			if !compare(left, right, clause.Value.Type, func(c int) bool { return c >= 0 }) {
+				return false
+			}
+		case sbquery.OpLowerEq:
+			if !compare(left, right, clause.Value.Type, func(c int) bool { return c <= 0 }) {
+				return false
+			}
+		case sbquery.OpIn:
+			if !in(left, right) {
+				return false
+			}
+		case sbquery.OpNotIn:
+			if in(left, right) {
+				return false
+			}
+		case sbquery.OpContains:
+			if !contains(left, right) {
+				return false
+			}
+		case sbquery.OpNotContains:
+			if !notContains(left, right) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func operandValue(doc map[string]any, operand sbquery.Operand) any {
+	if operand.Kind == sbquery.OperandField {
+		return doc[operand.Field]
+	}
+	return operand.Value
+}
+
+func compare(v any, val any, typ sbquery.ValueType, fn func(int) bool) bool {
+	if typ == sbquery.TypeNumber {
+		left, ok := number(v)
+		if !ok {
+			return false
+		}
+		right, ok := number(val)
+		if !ok {
+			return false
+		}
+		switch {
+		case left < right:
+			return fn(-1)
+		case left > right:
+			return fn(1)
+		default:
+			return fn(0)
+		}
+	}
+
+	return fn(strings.Compare(fmt.Sprintf("%v", v), fmt.Sprintf("%v", val)))
+}
+
+func number(v any) (float64, bool) {
+	switch n := v.(type) {
+	case int:
+		return float64(n), true
+	case int8:
+		return float64(n), true
+	case int16:
+		return float64(n), true
+	case int32:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case uint:
+		return float64(n), true
+	case uint8:
+		return float64(n), true
+	case uint16:
+		return float64(n), true
+	case uint32:
+		return float64(n), true
+	case uint64:
+		return float64(n), true
+	case float32:
+		return float64(n), true
+	case float64:
+		return n, true
+	default:
+		f, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64)
+		return f, err == nil
+	}
+}
+
+func in(v any, val any) bool {
+	switch list := val.(type) {
+	case []any:
+		for _, item := range list {
+			if equal(v, item) {
+				return true
+			}
+		}
+	case []string:
+		for _, item := range list {
+			if equal(v, item) {
+				return true
+			}
+		}
+	default:
+		return equal(v, val)
+	}
+	return false
 }
 
 func sortSlice[T any](list []T, fn func(a, b T) bool) []T {

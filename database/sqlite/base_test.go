@@ -151,6 +151,36 @@ func TestQueryDocuments(t *testing.T) {
 	}
 }
 
+func TestQueryDocumentsFieldReferenceWithNumberType(t *testing.T) {
+	col := "inventory_tasks"
+	docs := []interface{}{
+		map[string]interface{}{"title": "low-stock", "inventory": 2, "inventoryThreshold": 10},
+		map[string]interface{}{"title": "enough-stock", "inventory": 10, "inventoryThreshold": 2},
+		map[string]interface{}{"title": "string-order-would-fail", "inventory": 10, "inventoryThreshold": 2},
+	}
+	if err := datastore.BulkCreateDocument(adminAuth, confDBName, col, docs); err != nil {
+		t.Fatal(err)
+	}
+
+	filters, err := datastore.ParseQuery([][]interface{}{
+		{"inventory", "<=", map[string]any{"$field": "inventoryThreshold", "$type": "number"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := datastore.QueryDocuments(adminAuth, confDBName, col, filters, model.ListParams{Page: 1, Size: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Total != 1 {
+		t.Fatalf("expected total to be 1 got %d", result.Total)
+	}
+	if result.Results[0]["title"] != "low-stock" {
+		t.Fatalf("expected low-stock got %v", result.Results[0]["title"])
+	}
+}
+
 func TestGetDocumentByID(t *testing.T) {
 	task1 := newTask("getbyid", false)
 

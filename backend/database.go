@@ -195,11 +195,11 @@ func fromDoc(doc map[string]any, v interface{}) error {
 //
 // field name | operator | value
 //
-//    backend.BuildQueryFilters("done", "=", false)
+//	backend.BuildQueryFilters("done", "=", false)
 //
 // This would filter for the false value in the "done" field.
 //
-// Supported operators: =, !=, >, <, >=, <=, in, !in
+// Supported operators: =, !=, >, <, >=, <=, in, !in, contains, !contains
 func BuildQueryFilters(p ...any) (q [][]any, err error) {
 	if len(p)%3 != 0 {
 		err = errors.New("parameters should all have 3 values for each criteria")
@@ -215,4 +215,19 @@ func BuildQueryFilters(p ...any) (q [][]any, err error) {
 	}
 
 	return
+}
+
+// QueryField returns a query value marker that compares against another field.
+func QueryField(field string) map[string]any {
+	return map[string]any{"$field": field}
+}
+
+// QueryNumber returns a query value marker that compares a literal as a number.
+func QueryNumber(value any) map[string]any {
+	return map[string]any{"$value": value, "$type": "number"}
+}
+
+// QueryNumberField returns a query value marker that compares against another field as a number.
+func QueryNumberField(field string) map[string]any {
+	return map[string]any{"$field": field, "$type": "number"}
 }

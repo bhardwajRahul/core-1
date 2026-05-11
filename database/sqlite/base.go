@@ -182,7 +182,8 @@ func (sl *SQLite) ListDocuments(auth model.Auth, dbName, col string, params mode
 
 func (sl *SQLite) QueryDocuments(auth model.Auth, dbName, col string, filters map[string]interface{}, params model.ListParams) (result model.PagedResult, err error) {
 	where := secureRead(auth, col)
-	where = applyFilter(where, filters)
+	where, filterArgs := applyFilter(where, filters, 3)
+	queryArgs := append([]any{auth.AccountID, auth.UserID}, filterArgs...)
 
 	paging := setPaging(params)
 
@@ -195,7 +196,7 @@ func (sl *SQLite) QueryDocuments(auth model.Auth, dbName, col string, filters ma
 		%s
 	`, dbName, model.CleanCollectionName(col), where)
 
-	if err = sl.DB.QueryRow(qry, auth.AccountID, auth.UserID).Scan(&result.Total); err != nil {
+	if err = sl.DB.QueryRow(qry, queryArgs...).Scan(&result.Total); err != nil {
 		if !isTableExists(err) {
 			return result, nil
 		}
@@ -209,7 +210,7 @@ func (sl *SQLite) QueryDocuments(auth model.Auth, dbName, col string, filters ma
 		%s
 	`, dbName, model.CleanCollectionName(col), where, paging)
 
-	rows, err := sl.DB.Query(qry, auth.AccountID, auth.UserID)
+	rows, err := sl.DB.Query(qry, queryArgs...)
 	if err != nil {
 		return
 	}
@@ -322,7 +323,8 @@ func (sl *SQLite) UpdateDocument(auth model.Auth, dbName, col, id string, doc ma
 
 func (sl *SQLite) UpdateDocuments(auth model.Auth, dbName, col string, filters map[string]interface{}, updateFields map[string]interface{}) (n int64, err error) {
 	where := secureWrite(auth, col)
-	where = applyFilter(where, filters)
+	where, filterArgs := applyFilter(where, filters, 3)
+	queryArgs := append([]any{auth.AccountID, auth.UserID}, filterArgs...)
 
 	var ids []string
 	qry := fmt.Sprintf(`
@@ -331,7 +333,7 @@ func (sl *SQLite) UpdateDocuments(auth model.Auth, dbName, col string, filters m
 		%s
 	`, dbName, model.CleanCollectionName(col), where)
 
-	rows, err := sl.DB.Query(qry, auth.AccountID, auth.UserID)
+	rows, err := sl.DB.Query(qry, queryArgs...)
 	if err != nil {
 		return
 	}
@@ -351,15 +353,16 @@ func (sl *SQLite) UpdateDocuments(auth model.Auth, dbName, col string, filters m
 
 	qry = fmt.Sprintf(`
 		UPDATE %s_%s SET
-			data = json($3)
+			data = json($%d)
 		%s
-	`, dbName, model.CleanCollectionName(col), where)
+	`, dbName, model.CleanCollectionName(col), len(queryArgs)+1, where)
 
 	b, err := json.Marshal(updateFields)
 	if err != nil {
 		return 0, err
 	}
-	res, err := sl.DB.Exec(qry, auth.AccountID, auth.UserID, string(b))
+	execArgs := append(queryArgs, string(b))
+	res, err := sl.DB.Exec(qry, execArgs...)
 	if err != nil {
 		return 0, err
 	}
@@ -430,7 +433,8 @@ func (sl *SQLite) DeleteDocument(auth model.Auth, dbName, col, id string) (int64
 
 func (sl *SQLite) DeleteDocuments(auth model.Auth, dbName, col string, filters map[string]any) (n int64, err error) {
 	where := secureWrite(auth, col)
-	where = applyFilter(where, filters)
+	where, filterArgs := applyFilter(where, filters, 3)
+	queryArgs := append([]any{auth.AccountID, auth.UserID}, filterArgs...)
 
 	var ids []string
 	qry := fmt.Sprintf(`
@@ -439,7 +443,7 @@ func (sl *SQLite) DeleteDocuments(auth model.Auth, dbName, col string, filters m
 		%s
 	`, dbName, model.CleanCollectionName(col), where)
 
-	rows, err := sl.DB.Query(qry, auth.AccountID, auth.UserID)
+	rows, err := sl.DB.Query(qry, queryArgs...)
 	if err != nil {
 		return
 	}
@@ -461,7 +465,7 @@ func (sl *SQLite) DeleteDocuments(auth model.Auth, dbName, col string, filters m
 		%s
 	`, dbName, model.CleanCollectionName(col), where)
 
-	res, err := sl.DB.Exec(qry, auth.AccountID, auth.UserID)
+	res, err := sl.DB.Exec(qry, queryArgs...)
 	if err != nil {
 		return 0, err
 	}

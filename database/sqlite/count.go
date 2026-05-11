@@ -8,7 +8,7 @@ import (
 
 func (sl *SQLite) Count(auth model.Auth, dbName, col string, filters map[string]interface{}) (count int64, err error) {
 	where := secureRead(auth, col)
-	where = applyFilter(where, filters)
+	where, filterArgs := applyFilter(where, filters, 3)
 
 	query := fmt.Sprintf(`
     SELECT COUNT(*)
@@ -16,7 +16,8 @@ func (sl *SQLite) Count(auth model.Auth, dbName, col string, filters map[string]
     %s;
     `, dbName, model.CleanCollectionName(col), where)
 
-	err = sl.DB.QueryRow(query, auth.AccountID, auth.UserID).Scan(&count)
+	args := append([]any{auth.AccountID, auth.UserID}, filterArgs...)
+	err = sl.DB.QueryRow(query, args...).Scan(&count)
 	if err != nil {
 		return -1, err
 	}

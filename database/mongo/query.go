@@ -6,54 +6,85 @@ import (
 	"strings"
 
 	"github.com/staticbackendhq/core/internal"
+	sbquery "github.com/staticbackendhq/core/internal/query"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func (mg *Mongo) ParseQuery(clauses [][]interface{}) (map[string]interface{}, error) {
+	q, err := sbquery.Parse(clauses)
+	if err != nil {
+		return nil, err
+	}
+	return buildFilter(q), nil
+}
+
+func buildFilter(q sbquery.Query) bson.M {
 	filter := bson.M{}
-	for i, clause := range clauses {
-		if len(clause) != 3 {
-			return filter, fmt.Errorf("the %d query clause did not contains the required 3 parameters (field, operator, value)", i+1)
+	var exprs []bson.M
+
+	for _, clause := range q {
+		if clause.Value.Kind == sbquery.OperandField {
+			exprs = append(exprs, fieldExpr(clause))
+			continue
 		}
 
-		field, ok := clause[0].(string)
-		if !ok {
-			return filter, fmt.Errorf("the %d query clause's field parameter must be a string: %v", i+1, clause[0])
-		}
-
-		op, ok := clause[1].(string)
-		if !ok {
-			return filter, fmt.Errorf("the %d query clause's operator must be a string: %v", i+1, clause[1])
-		}
-
-		switch op {
-		case "=", "==":
-			filter[field] = clause[2]
-		case "!=", "<>":
-			filter[field] = bson.M{"$ne": clause[2]}
-		case ">":
-			filter[field] = bson.M{"$gt": clause[2]}
-		case "<":
-			filter[field] = bson.M{"$lt": clause[2]}
-		case ">=":
-			filter[field] = bson.M{"$gte": clause[2]}
-		case "<=":
-			filter[field] = bson.M{"$lte": clause[2]}
-		case "in":
-			filter[field] = bson.M{"$in": clause[2]}
-		case "!in", "nin":
-			filter[field] = bson.M{"$nin": clause[2]}
-		case "contains":
-			filter[field] = bson.M{"$type": "string", "$regex": regexp.QuoteMeta(fmt.Sprintf("%v", clause[2])), "$options": "i"}
-		case "!contains":
-			filter[field] = bson.M{"$type": "string", "$not": primitive.Regex{Pattern: regexp.QuoteMeta(fmt.Sprintf("%v", clause[2])), Options: "i"}}
-		default:
-			return filter, fmt.Errorf("the %d query clause's operator: %s is not supported at the moment", i+1, op)
+		switch clause.Operator {
+		case sbquery.OpEqual:
+			filter[clause.Field] = clause.Value.Value
+		case sbquery.OpNotEqual:
+			filter[clause.Field] = bson.M{"$ne": clause.Value.Value}
+		case sbquery.OpGreater:
+			filter[clause.Field] = bson.M{"$gt": clause.Value.Value}
+		case sbquery.OpLower:
+			filter[clause.Field] = bson.M{"$lt": clause.Value.Value}
+		case sbquery.OpGreaterEq:
+			filter[clause.Field] = bson.M{"$gte": clause.Value.Value}
+		case sbquery.OpLowerEq:
+			filter[clause.Field] = bson.M{"$lte": clause.Value.Value}
+		case sbquery.OpIn:
+			filter[clause.Field] = bson.M{"$in": clause.Value.Value}
+		case sbquery.OpNotIn:
+			filter[clause.Field] = bson.M{"$nin": clause.Value.Value}
+		case sbquery.OpContains:
+			filter[clause.Field] = bson.M{"$type": "string", "$regex": regexp.QuoteMeta(fmt.Sprintf("%v", clause.Value.Value)), "$options": "i"}
+		case sbquery.OpNotContains:
+			filter[clause.Field] = bson.M{"$type": "string", "$not": primitive.Regex{Pattern: regexp.QuoteMeta(fmt.Sprintf("%v", clause.Value.Value)), Options: "i"}}
 		}
 	}
 
-	return filter, nil
+	if len(exprs) == 1 {
+		filter["$expr"] = exprs[0]
+	} else if len(exprs) > 1 {
+		filter["$and"] = exprFilter(exprs)
+	}
+
+	return filter
+}
+
+func fieldExpr(clause sbquery.Clause) bson.M {
+	op := "$eq"
+	switch clause.Operator {
+	case sbquery.OpNotEqual:
+		op = "$ne"
+	case sbquery.OpGreater:
+		op = "$gt"
+	case sbquery.OpLower:
+		op = "$lt"
+	case sbquery.OpGreaterEq:
+		op = "$gte"
+	case sbquery.OpLowerEq:
+		op = "$lte"
+	}
+	return bson.M{op: bson.A{"$" + clause.Field, "$" + clause.Value.Field}}
+}
+
+func exprFilter(exprs []bson.M) bson.A {
+	items := make(bson.A, 0, len(exprs))
+	for _, expr := range exprs {
+		items = append(items, bson.M{"$expr": expr})
+	}
+	return items
 }
 
 func secureRead(acctID, userID primitive.ObjectID, role int, col string, filter bson.M) {
