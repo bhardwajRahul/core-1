@@ -140,12 +140,6 @@ func ParseOperator(op string) (Operator, error) {
 func ParseOperand(v any) (Operand, error) {
 	m, ok := v.(map[string]interface{})
 	if !ok {
-		if ma, ok := v.(map[string]any); ok {
-			m = ma
-			ok = true
-		}
-	}
-	if !ok {
 		return Operand{Kind: OperandLiteral, Value: v, Type: InferValueType(v)}, nil
 	}
 
