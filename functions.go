@@ -33,6 +33,11 @@ func (f *functions) add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := refreshFunctionTriggerCache(conf.Name, data.TriggerTopic); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -57,6 +62,10 @@ func (f *functions) update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if err := refreshFunctionTriggerCache(conf.Name, data.Trigger); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -69,12 +78,38 @@ func (f *functions) del(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := getURLPart(r.URL.Path, 3)
+	fn, err := backend.DB.GetFunctionByName(conf.Name, name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if err := backend.DB.DeleteFunction(conf.Name, name); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := refreshFunctionTriggerCache(conf.Name, fn.TriggerTopic); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func refreshFunctionTriggerCache(dbName, trigger string) error {
+	funcs, err := backend.DB.ListFunctionsByTrigger(dbName, trigger)
+	if err != nil {
+		return err
+	}
+
+	ids := make([]string, 0, len(funcs))
+	for _, fn := range funcs {
+		if err := backend.Cache.SetTyped("fn_"+fn.ID, fn); err != nil {
+			return err
+		}
+		ids = append(ids, fn.ID)
+	}
+
+	return backend.Cache.SetTyped(dbName+":"+trigger, ids)
 }
 
 func (f *functions) exec(w http.ResponseWriter, r *http.Request) {

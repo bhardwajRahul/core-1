@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -13,6 +14,8 @@ import (
 	"github.com/staticbackendhq/core/model"
 	"golang.org/x/crypto/bcrypt"
 )
+
+const systemAccountTrigger = "sys-sb_accounts"
 
 // User handles everything related to accounts and users inside a database
 type User struct {
@@ -222,7 +225,41 @@ func (u User) CreateAccountAndUser(email, password string, role int) ([]byte, mo
 	if err != nil {
 		return nil, model.User{}, err
 	}
+	u.publishAccountCreated(acctID, email, tok)
 	return jwtBytes, tok, nil
+}
+
+func (u User) publishAccountCreated(accountID, email string, tok model.User) {
+	auth := model.Auth{
+		AccountID: tok.AccountID,
+		UserID:    tok.ID,
+		Email:     tok.Email,
+		Role:      tok.Role,
+		Token:     tok.Token,
+	}
+
+	data := map[string]interface{}{
+		"id":        accountID,
+		"email":     email,
+		"userId":    tok.ID,
+		"userEmail": tok.Email,
+		"userRole":  tok.Role,
+	}
+	b, err := json.Marshal(data)
+	if err != nil {
+		Log.Error().Err(err).Msg("error marshaling system account event")
+		return
+	}
+
+	if err := Cache.Publish(model.Command{
+		Channel: systemAccountTrigger,
+		Data:    string(b),
+		Type:    model.MsgTypeDBCreated,
+		Auth:    auth,
+		Base:    u.conf.Name,
+	}); err != nil {
+		Log.Error().Err(err).Msg("error publishing system account event")
+	}
 }
 
 // CreateUser creates a user for an Account

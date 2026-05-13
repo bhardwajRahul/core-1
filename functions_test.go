@@ -328,6 +328,103 @@ func TestFunctionTriggerByDBChanges(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 }
 
+func TestFunctionTriggerBySystemAccountCreated(t *testing.T) {
+	code := `
+	function handle(channel, type, data) {
+		if (channel != "sys-sb_accounts" || type != "db_created") return;
+
+		const res = create("system_onboarding", {
+			sourceAccountId: data.id,
+			sourceEmail: data.email,
+			sourceUserId: data.userId,
+			sourceUserRole: data.userRole
+		});
+		if (!res.ok) {
+			log("ERROR: " + res.content);
+			return;
+		}
+		log("created onboarding row for " + data.email);
+	}
+	`
+
+	data := model.ExecData{
+		FunctionName: "fn-test-system-account-created",
+		Code:         code,
+		TriggerTopic: "sys-sb_accounts",
+	}
+	addResp := dbReq(t, funexec.add, "POST", "/", data, true)
+	defer addResp.Body.Close()
+	if addResp.StatusCode != http.StatusOK {
+		t.Fatal(GetResponseBody(t, addResp))
+	}
+
+	usrSvc := backend.Membership(model.DatabaseConfig{
+		ID:   pubKey,
+		Name: dbName,
+	})
+	_, newUser, err := usrSvc.CreateAccountAndUser("system-trigger@test.com", "system-trigger-pass", 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	newUserAuth := model.Auth{
+		AccountID: newUser.AccountID,
+		UserID:    newUser.ID,
+		Email:     newUser.Email,
+		Role:      newUser.Role,
+		Token:     newUser.Token,
+	}
+	var docs []map[string]interface{}
+	for i := 0; i < 10; i++ {
+		result, err := backend.DB.ListDocuments(newUserAuth, dbName, "system_onboarding", model.ListParams{Page: 1, Size: 25})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, doc := range result.Results {
+			if doc["sourceAccountId"] == newUser.AccountID {
+				docs = append(docs, doc)
+			}
+		}
+		if len(docs) > 0 {
+			break
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+	if len(docs) == 0 {
+		t.Fatal("expected system account trigger to create an onboarding document")
+	}
+	if docs[0]["accountId"] != newUser.AccountID {
+		t.Errorf("expected onboarding document to be created with new user account %s got %v", newUser.AccountID, docs[0]["accountId"])
+	}
+
+	docID, ok := docs[0]["id"].(string)
+	if !ok {
+		t.Fatalf("expected onboarding document id to be a string, got %T", docs[0]["id"])
+	}
+	docs[0]["updatedByNewUser"] = true
+	if _, err := backend.DB.UpdateDocument(newUserAuth, dbName, "system_onboarding", docID, docs[0]); err != nil {
+		t.Fatalf("expected new user to update onboarding document: %v", err)
+	}
+
+	infoResp := dbReq(t, funexec.info, "GET", "/fn/info/fn-test-system-account-created", nil, true)
+	defer infoResp.Body.Close()
+	if infoResp.StatusCode >= 299 {
+		t.Fatal(GetResponseBody(t, infoResp))
+	}
+
+	var checkFn model.ExecData
+	if err := parseBody(infoResp.Body, &checkFn); err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range checkFn.History {
+		for _, line := range h.Output {
+			if strings.Contains(line, "ERROR") {
+				t.Fatalf("found error in function exec log: %v", h.Output)
+			}
+		}
+	}
+}
+
 func TestFunctionTriggerByPublishingMsg(t *testing.T) {
 	code := `
 	function handle(channel, type, data) {
