@@ -68,6 +68,11 @@ func (c *Cache) Set(key string, value string) error {
 	return nil
 }
 
+// Delete removes a value by key.
+func (c *Cache) Delete(key string) error {
+	return c.Rdb.Del(c.Ctx, key).Err()
+}
+
 // GetTyped retrives the value for a key and unmarshal the JSON value into the
 // interface
 func (c *Cache) GetTyped(key string, v interface{}) error {

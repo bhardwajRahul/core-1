@@ -105,6 +105,40 @@ func (pg *PostgreSQL) UserSetPassword(dbName, tokenID, password string) error {
 	return nil
 }
 
+func (pg *PostgreSQL) ChangeUserEmail(dbName, userID, accountID, oldEmail, newEmail string) error {
+	tx, err := pg.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	qry := fmt.Sprintf(`
+		UPDATE %s.sb_tokens SET email = $2
+		WHERE id = $1;
+	`, dbName)
+	if _, err := tx.Exec(qry, userID, newEmail); err != nil {
+		return err
+	}
+
+	qry = fmt.Sprintf(`
+		UPDATE %s.sb_account_users SET email = $2
+		WHERE user_id = $1;
+	`, dbName)
+	if _, err := tx.Exec(qry, userID, newEmail); err != nil {
+		return err
+	}
+
+	qry = fmt.Sprintf(`
+		UPDATE %s.sb_accounts SET email = $3
+		WHERE id = $1 AND email = $2;
+	`, dbName)
+	if _, err := tx.Exec(qry, accountID, oldEmail, newEmail); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
 func (pg *PostgreSQL) GetFirstUserFromAccountID(dbName, accountID string) (tok model.User, err error) {
 	qry := fmt.Sprintf(`
 		SELECT * 

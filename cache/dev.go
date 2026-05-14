@@ -51,6 +51,15 @@ func (d *CacheDev) Set(key string, value string) error {
 	return nil
 }
 
+// Delete removes a value by key.
+func (d *CacheDev) Delete(key string) error {
+	d.m.Lock()
+	defer d.m.Unlock()
+
+	delete(d.data, key)
+	return nil
+}
+
 // GetTyped retrives the value for a key and unmarshal the JSON value into the
 func (d *CacheDev) GetTyped(key string, v any) error {
 	val, err := d.Get(key)

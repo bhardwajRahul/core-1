@@ -117,6 +117,32 @@ func (mg *Mongo) UserSetPassword(dbName, tokenID, password string) error {
 	return nil
 }
 
+func (mg *Mongo) ChangeUserEmail(dbName, userID, accountID, oldEmail, newEmail string) error {
+	db := mg.Client.Database(dbName)
+
+	uid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return err
+	}
+	aid, err := primitive.ObjectIDFromHex(accountID)
+	if err != nil {
+		return err
+	}
+
+	update := bson.M{"$set": bson.M{"email": newEmail}}
+	if _, err := db.Collection("sb_tokens").UpdateOne(mg.Ctx, bson.M{FieldID: uid}, update); err != nil {
+		return err
+	}
+	if _, err := db.Collection("sb_account_users").UpdateMany(mg.Ctx, bson.M{"userId": uid}, update); err != nil {
+		return err
+	}
+	if _, err := db.Collection("sb_accounts").UpdateOne(mg.Ctx, bson.M{FieldID: aid, "email": oldEmail}, update); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (mg *Mongo) GetFirstUserFromAccountID(dbName, accountID string) (tok model.User, err error) {
 	db := mg.Client.Database(dbName)
 

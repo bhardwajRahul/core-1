@@ -2,6 +2,7 @@ package staticbackend
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"net/http"
@@ -306,6 +307,46 @@ func (m *membership) me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respond(w, http.StatusOK, auth)
+}
+
+func (m *membership) changeEmail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	conf, auth, err := middleware.Extract(r, true)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	var data = new(struct {
+		Email string `json:"email"`
+	})
+	if err := parseBody(r.Body, &data); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	data.Email = strings.ToLower(strings.TrimSpace(data.Email))
+	if len(data.Email) == 0 || !strings.Contains(data.Email, "@") || !strings.Contains(data.Email, ".") {
+		http.Error(w, "invalid email", http.StatusBadRequest)
+		return
+	}
+
+	mship := backend.Membership(conf)
+	if err := mship.ChangeEmail(auth, data.Email); err != nil {
+		if errors.Is(err, backend.ErrEmailAlreadyInUse) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	respond(w, http.StatusOK, true)
 }
 
 func (m *membership) magicLink(w http.ResponseWriter, r *http.Request) {

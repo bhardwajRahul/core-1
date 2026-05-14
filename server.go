@@ -141,6 +141,7 @@ func Start(c config.AppConfig, log *logger.Logger) {
 	http.Handle("/password/reset", middleware.Chain(http.HandlerFunc(m.resetPassword), pubWithDB...))
 	http.Handle("/setrole", middleware.Chain(http.HandlerFunc(m.setRole), stdAuth...))
 	http.Handle("/me", middleware.Chain(http.HandlerFunc(m.me), stdAuth...))
+	http.Handle("/me/email", middleware.Chain(http.HandlerFunc(m.changeEmail), stdAuth...))
 
 	// oauth handlers
 	el := &ExternalLogins{log: log}

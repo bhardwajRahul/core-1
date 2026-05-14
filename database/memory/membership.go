@@ -3,6 +3,7 @@ package memory
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/staticbackendhq/core/model"
@@ -82,6 +83,39 @@ func (m *Memory) UserSetPassword(dbName, tokenID, password string) error {
 
 	tok.Password = password
 	return create(m, dbName, "sb_tokens", tok.ID, tok)
+}
+
+func (m *Memory) ChangeUserEmail(dbName, userID, accountID, oldEmail, newEmail string) error {
+	var tok model.User
+	if err := getByID(m, dbName, "sb_tokens", userID, &tok); err != nil {
+		return err
+	}
+
+	tok.Email = newEmail
+	if err := create(m, dbName, "sb_tokens", tok.ID, tok); err != nil {
+		return err
+	}
+
+	accountUsers, err := all[model.AccountUser](m, dbName, "sb_account_users")
+	if err != nil {
+		return err
+	}
+	for _, au := range accountUsers {
+		if au.UserID == userID {
+			au.Email = newEmail
+			if err := create(m, dbName, "sb_account_users", au.ID, au); err != nil {
+				return err
+			}
+		}
+	}
+
+	var acct model.Account
+	if err := getByID(m, dbName, "sb_accounts", accountID, &acct); err == nil && strings.EqualFold(acct.Email, oldEmail) {
+		acct.Email = newEmail
+		return create(m, dbName, "sb_accounts", acct.ID, acct)
+	}
+
+	return nil
 }
 
 func (m *Memory) UpdateUserAccount(dbName, userID, newAccountID string, role int) error {

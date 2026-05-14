@@ -108,6 +108,69 @@ func TestUserSetPassword(t *testing.T) {
 	}
 }
 
+func TestChangeUserEmail(t *testing.T) {
+	oldEmail := "change-email-old@test.com"
+	newEmail := "change-email-new@test.com"
+
+	acctID, err := datastore.CreateAccount(confDBName, oldEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assocAcctID, err := datastore.CreateAccount(confDBName, "change-email-assoc@test.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	userID, err := datastore.CreateUser(confDBName, model.User{
+		AccountID: acctID,
+		Token:     "change-email-token",
+		Email:     oldEmail,
+		Password:  "pw",
+		Role:      50,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := datastore.AddAccountUser(confDBName, model.AccountUser{
+		UserID:    userID,
+		AccountID: assocAcctID,
+		Email:     oldEmail,
+		Role:      10,
+		Token:     "change-email-assoc-token",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := datastore.ChangeUserEmail(confDBName, userID, acctID, oldEmail, newEmail); err != nil {
+		t.Fatal(err)
+	}
+
+	tok, err := datastore.FindUser(confDBName, userID, "change-email-token")
+	if err != nil {
+		t.Fatal(err)
+	} else if tok.Email != newEmail {
+		t.Fatalf("expected user email %s got %s", newEmail, tok.Email)
+	}
+
+	assoc, err := datastore.GetAccountUser(confDBName, userID, assocAcctID)
+	if err != nil {
+		t.Fatal(err)
+	} else if assoc.Email != newEmail {
+		t.Fatalf("expected association email %s got %s", newEmail, assoc.Email)
+	}
+
+	accounts, err := datastore.ListAccounts(confDBName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, account := range accounts {
+		if account.ID == acctID && account.Email != newEmail {
+			t.Fatalf("expected account email %s got %s", newEmail, account.Email)
+		}
+	}
+}
+
 func TestUserAddRemoveFromAccount(t *testing.T) {
 	u := model.User{
 		AccountID: adminAuth.AccountID,

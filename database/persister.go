@@ -104,6 +104,8 @@ type Persister interface {
 	SetUserRole(dbName, accountID, email string, role int) error
 	// UserSetPassword user initiated password reset
 	UserSetPassword(dbName, userID, password string) error
+	// ChangeUserEmail changes a user's email and related membership/account email records
+	ChangeUserEmail(dbName, userID, accountID, oldEmail, newEmail string) error
 	// RemoveUser permanently removes a user from an account
 	RemoveUser(auth model.Auth, dbName, userID string) error
 

@@ -1,12 +1,16 @@
 package staticbackend
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/staticbackendhq/core/backend"
+	"github.com/staticbackendhq/core/middleware"
 	"github.com/staticbackendhq/core/model"
 )
 
@@ -25,6 +29,80 @@ func TestGetCurrentAuthUser(t *testing.T) {
 		t.Errorf("expected email to be %s got %s", admEmail, me.Email)
 	} else if me.Role != 100 {
 		t.Errorf("expected role to be 100 got %d", me.Role)
+	}
+}
+
+func TestChangeEmail(t *testing.T) {
+	conf, err := backend.DB.FindDatabase(pubKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	oldEmail := "change-http-old@test.com"
+	newEmail := "change-http-new@test.com"
+	token, user, err := backend.Membership(conf).CreateUser(testAccountID, oldEmail, userPassword, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp := authReqWithToken(t, string(token), mship.changeEmail, "POST", "/me/email", map[string]string{"email": newEmail})
+	defer resp.Body.Close()
+	if resp.StatusCode > 299 {
+		t.Fatal(GetResponseBody(t, resp))
+	}
+
+	updated, err := backend.DB.FindUserByEmail(dbName, newEmail)
+	if err != nil {
+		t.Fatal(err)
+	} else if updated.Email != newEmail {
+		t.Fatalf("expected persisted email %s got %s", newEmail, updated.Email)
+	}
+
+	var cached model.Auth
+	if err := backend.Cache.GetTyped(fmt.Sprintf("%s|%s", user.ID, user.Token), &cached); err == nil {
+		t.Fatalf("expected auth cache to be cleared, found cached email %s", cached.Email)
+	}
+
+	resp = authReqWithToken(t, string(token), mship.me, "GET", "/me", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode > 299 {
+		t.Fatal(GetResponseBody(t, resp))
+	}
+
+	var me model.Auth
+	if err := parseBody(resp.Body, &me); err != nil {
+		t.Fatal(err)
+	} else if me.Email != newEmail {
+		t.Fatalf("expected cached auth to refresh email to %s got %s", newEmail, me.Email)
+	}
+}
+
+func TestChangeEmailConflict(t *testing.T) {
+	conf, err := backend.DB.FindDatabase(pubKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	token, _, err := backend.Membership(conf).CreateUser(testAccountID, "change-conflict-user@test.com", userPassword, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := backend.Membership(conf).CreateUser(testAccountID, "change-conflict-existing@test.com", userPassword, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	resp := authReqWithToken(t, string(token), mship.changeEmail, "POST", "/me/email", map[string]string{"email": "change-conflict-existing@test.com"})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("expected 409 got %d: %s", resp.StatusCode, GetResponseBody(t, resp))
+	}
+}
+
+func TestChangeEmailInvalidEmail(t *testing.T) {
+	resp := dbReq(t, mship.changeEmail, "POST", "/me/email", map[string]string{"email": "invalid"})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 got %d", resp.StatusCode)
 	}
 }
 
@@ -131,4 +209,32 @@ func adminAuthUserID(t *testing.T) string {
 	}
 
 	return user.ID
+}
+
+func authReqWithToken(t *testing.T, token string, hf func(http.ResponseWriter, *http.Request), method, path string, v interface{}) *http.Response {
+	t.Helper()
+
+	var payload []byte
+	if v != nil {
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal("error marshaling post data:", err)
+		}
+		payload = b
+	}
+
+	req := httptest.NewRequest(method, path, bytes.NewReader(payload))
+	w := httptest.NewRecorder()
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Set("SB-PUBLIC-KEY", pubKey)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	stdAuth := []middleware.Middleware{
+		middleware.WithDB(backend.DB, backend.Cache, getStripePortalURL),
+		middleware.RequireAuth(backend.DB, backend.Cache),
+	}
+	h := middleware.Chain(http.HandlerFunc(hf), stdAuth...)
+	h.ServeHTTP(w, req)
+
+	return w.Result()
 }

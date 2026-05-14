@@ -17,6 +17,8 @@ import (
 
 const systemAccountTrigger = "sys-sb_accounts"
 
+var ErrEmailAlreadyInUse = errors.New("email already in use")
+
 // User handles everything related to accounts and users inside a database
 type User struct {
 	conf model.DatabaseConfig
@@ -337,6 +339,43 @@ func (u User) ResetPassword(email, code, password string) error {
 func (u User) SetUserRole(accountID, email string, role int) error {
 	email = strings.ToLower(email)
 	return DB.SetUserRole(u.conf.Name, accountID, email, role)
+}
+
+// ChangeEmail changes the authenticated user's email address.
+func (u User) ChangeEmail(auth model.Auth, newEmail string) error {
+	newEmail = strings.ToLower(newEmail)
+	oldEmail := strings.ToLower(auth.Email)
+
+	if newEmail == oldEmail {
+		return nil
+	}
+
+	exists, err := DB.UserEmailExists(u.conf.Name, newEmail)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return ErrEmailAlreadyInUse
+	}
+
+	if err := DB.ChangeUserEmail(u.conf.Name, auth.UserID, auth.AccountID, oldEmail, newEmail); err != nil {
+		return err
+	}
+
+	cacheKey := fmt.Sprintf("%s|%s", auth.UserID, auth.Token)
+	if err := Cache.Delete(cacheKey); err != nil {
+		return err
+	}
+
+	tok, err := DB.FindUserByEmail(u.conf.Name, newEmail)
+	if err != nil {
+		return err
+	}
+	homeCacheKey := fmt.Sprintf("%s|%s", tok.ID, tok.Token)
+	if homeCacheKey != cacheKey {
+		return Cache.Delete(homeCacheKey)
+	}
+	return nil
 }
 
 // UserSetPassword password changes initiated by the user

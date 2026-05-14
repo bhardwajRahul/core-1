@@ -11,6 +11,8 @@ type Volatilizer interface {
 	Get(key string) (string, error)
 	// Set sets a string value
 	Set(key string, value string) error
+	// Delete removes a value by key
+	Delete(key string) error
 	// GetTyped returns a typed struct by its key
 	GetTyped(key string, v any) error
 	// SetTyped sets a typed struct for a key
