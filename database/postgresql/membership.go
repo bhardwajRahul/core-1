@@ -1,6 +1,8 @@
 package postgresql
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -105,12 +107,16 @@ func (pg *PostgreSQL) UserSetPassword(dbName, tokenID, password string) error {
 	return nil
 }
 
-func (pg *PostgreSQL) ChangeUserEmail(dbName, userID, accountID, oldEmail, newEmail string) error {
+func (pg *PostgreSQL) ChangeUserEmail(dbName, userID, accountID, oldEmail, newEmail string) (err error) {
 	tx, err := pg.DB.Begin()
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) && err == nil {
+			err = rbErr
+		}
+	}()
 
 	qry := fmt.Sprintf(`
 		UPDATE %s.sb_tokens SET email = $2

@@ -1,6 +1,8 @@
 package sqlite
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -108,12 +110,16 @@ func (sl *SQLite) UserSetPassword(dbName, tokenID, password string) error {
 	return nil
 }
 
-func (sl *SQLite) ChangeUserEmail(dbName, userID, accountID, oldEmail, newEmail string) error {
+func (sl *SQLite) ChangeUserEmail(dbName, userID, accountID, oldEmail, newEmail string) (err error) {
 	tx, err := sl.DB.Begin()
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) && err == nil {
+			err = rbErr
+		}
+	}()
 
 	qry := fmt.Sprintf(`
 		UPDATE %s_sb_tokens SET email = $2
