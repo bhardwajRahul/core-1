@@ -73,6 +73,99 @@ func TestRuntimeDatabaseHelpers(t *testing.T) {
 	assertFunctionCompleted(t, ctx.datastore, ctx.fn.ID)
 }
 
+func TestRuntimeBulkDatabaseHelpers(t *testing.T) {
+	code := `
+	function fail(message) {
+		throw new Error(message);
+	}
+
+	function expectOK(result, name) {
+		if (!result.ok) {
+			fail(name + " failed: " + result.content);
+		}
+		return result.content;
+	}
+
+	function handle(body) {
+		var generated = expectOK(newId(), "newId");
+		if (typeof generated !== "string" || generated.length === 0) {
+			fail("newId returned an empty id");
+		}
+
+		expectOK(createBulk("runtime_bulk_contacts", [
+			{ email: "ada@example.com", company: "StaticBackend", score: 1, segment: "lead" },
+			{ email: "grace@example.com", company: "StaticBackend", score: 2, segment: "lead" },
+			{ email: "linus@example.com", company: "Kernel", score: 3, segment: "customer" },
+			{ email: "dennis@example.com", company: "Bell", score: 4, segment: "archive" }
+		]), "createBulk");
+
+		var listed = expectOK(query("runtime_bulk_contacts", []), "query all");
+		if (listed.results.length !== 4) {
+			fail("expected 4 created docs, got " + listed.results.length);
+		}
+
+		var ids = [listed.results[0].id, listed.results[1].id];
+		var byIds = expectOK(getByIds("runtime_bulk_contacts", ids), "getByIds");
+		if (byIds.length !== 2) {
+			fail("expected 2 docs by ids, got " + byIds.length);
+		}
+
+		var staticBackendCount = expectOK(count("runtime_bulk_contacts", [["company", "=", "StaticBackend"]]), "count");
+		if (staticBackendCount !== 2) {
+			fail("expected count 2, got " + staticBackendCount);
+		}
+
+		var updatedMany = expectOK(updateMany("runtime_bulk_contacts", [["segment", "=", "lead"]], { segment: "qualified" }), "updateMany");
+		if (updatedMany !== 2) {
+			fail("expected updateMany count 2, got " + updatedMany);
+		}
+
+		var updatedBulk = expectOK(updateBulk("runtime_bulk_contacts", [["company", "=", "Kernel"]], { segment: "qualified" }), "updateBulk");
+		if (updatedBulk !== 1) {
+			fail("expected updateBulk count 1, got " + updatedBulk);
+		}
+
+		var qualified = expectOK(query("runtime_bulk_contacts", [["segment", "=", "qualified"]], { Page: 1, Size: 25 }), "query qualified");
+		if (qualified.results.length !== 3) {
+			fail("expected 3 qualified docs, got " + qualified.results.length);
+		}
+
+		expectOK(incrementValue("runtime_bulk_contacts", qualified.results[0].id, "score", 5), "incrementValue");
+		var incremented = expectOK(getById("runtime_bulk_contacts", qualified.results[0].id), "getById incremented");
+		if (incremented.score !== qualified.results[0].score + 5) {
+			fail("expected incremented score, got " + incremented.score);
+		}
+
+		var deletedMany = expectOK(deleteMany("runtime_bulk_contacts", [["company", "=", "Bell"]]), "deleteMany");
+		if (deletedMany !== 1) {
+			fail("expected deleteMany count 1, got " + deletedMany);
+		}
+
+		var deletedBulk = expectOK(deleteBulk("runtime_bulk_contacts", [["segment", "=", "qualified"]]), "deleteBulk");
+		if (deletedBulk !== 3) {
+			fail("expected deleteBulk count 3, got " + deletedBulk);
+		}
+	}`
+
+	ctx := newRuntimeTestContext(t, "crm-bulk-db", code)
+	if err := ctx.env.Execute(map[string]any{}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := ctx.datastore.ListDocuments(ctx.env.Auth, ctx.env.BaseName, "runtime_bulk_contacts", model.ListParams{
+		Page: 1,
+		Size: 25,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Total != 0 {
+		t.Fatalf("expected all runtime_bulk_contacts docs to be deleted, got %d", result.Total)
+	}
+
+	assertFunctionCompleted(t, ctx.datastore, ctx.fn.ID)
+}
+
 func TestRuntimeSearchHelpers(t *testing.T) {
 	code := `
 	function handle(body) {

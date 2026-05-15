@@ -257,6 +257,33 @@ func (env *ExecutionEnvironment) addDatabaseFunctions(vm *goja.Runtime) error {
 		return err
 	}
 
+	err = vm.Set("createBulk", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 2 {
+			return vm.ToValue(Result{Content: "argument missmatch: you need 2 arguments for createBulk(col, docs)"})
+		}
+		var col string
+		if err := vm.ExportTo(call.Argument(0), &col); err != nil {
+			return vm.ToValue(Result{Content: "the first argument should be a string"})
+		}
+		var rawDocs []map[string]interface{}
+		if err := vm.ExportTo(call.Argument(1), &rawDocs); err != nil {
+			return vm.ToValue(Result{Content: "the second argument should be an array of objects"})
+		}
+		docs := make([]interface{}, 0, len(rawDocs))
+		for _, doc := range rawDocs {
+			docs = append(docs, doc)
+		}
+
+		if err := env.DataStore.BulkCreateDocument(env.Auth, env.BaseName, col, docs); err != nil {
+			return vm.ToValue(Result{Content: fmt.Sprintf("error calling createBulk(): %s", err.Error())})
+		}
+
+		return vm.ToValue(Result{OK: true})
+	})
+	if err != nil {
+		return err
+	}
+
 	err = vm.Set("list", func(call goja.FunctionCall) goja.Value {
 		if len(call.Arguments) < 1 {
 			return vm.ToValue(Result{Content: "argument missmatch: your need at least 1 argument for list(col, [params])"})
@@ -321,6 +348,36 @@ func (env *ExecutionEnvironment) addDatabaseFunctions(vm *goja.Runtime) error {
 		return err
 	}
 
+	err = vm.Set("getByIds", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 2 {
+			return vm.ToValue(Result{Content: "argument missmatch: you need 2 arguments for getByIds(col, ids)"})
+		}
+		var col string
+		if err := vm.ExportTo(call.Argument(0), &col); err != nil {
+			return vm.ToValue(Result{Content: "the first argument should be a string"})
+		}
+		var ids []string
+		if err := vm.ExportTo(call.Argument(1), &ids); err != nil {
+			return vm.ToValue(Result{Content: "the second argument should be an array of strings"})
+		}
+
+		docs, err := env.DataStore.GetDocumentsByIDs(env.Auth, env.BaseName, col, ids)
+		if err != nil {
+			return vm.ToValue(Result{Content: fmt.Sprintf("error calling getByIds(): %s", err.Error())})
+		}
+
+		for _, doc := range docs {
+			if err := env.clean(doc); err != nil {
+				return vm.ToValue(Result{Content: err.Error()})
+			}
+		}
+
+		return vm.ToValue(Result{OK: true, Content: docs})
+	})
+	if err != nil {
+		return err
+	}
+
 	err = vm.Set("query", func(call goja.FunctionCall) goja.Value {
 		if len(call.Arguments) < 2 {
 			return vm.ToValue(Result{Content: "argument missmatch: you need at least 2 arguments for query(col, filter, [params])"})
@@ -372,6 +429,41 @@ func (env *ExecutionEnvironment) addDatabaseFunctions(vm *goja.Runtime) error {
 		return err
 	}
 
+	err = vm.Set("count", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) < 1 || len(call.Arguments) > 2 {
+			return vm.ToValue(Result{Content: "argument missmatch: you need 1 or 2 arguments for count(col, [filter])"})
+		}
+		var col string
+		if err := vm.ExportTo(call.Argument(0), &col); err != nil {
+			return vm.ToValue(Result{Content: "the first argument should be a string"})
+		}
+
+		var clauses [][]interface{}
+		if len(call.Arguments) == 2 {
+			v := call.Argument(1)
+			if !goja.IsNull(v) && !goja.IsUndefined(v) {
+				if err := vm.ExportTo(v, &clauses); err != nil {
+					return vm.ToValue(Result{Content: "the second argument should be a query filter: [['field', '==', 'value'], ...]"})
+				}
+			}
+		}
+
+		filter, err := env.DataStore.ParseQuery(clauses)
+		if err != nil {
+			return vm.ToValue(Result{Content: fmt.Sprintf("error parsing query filter: %v", err)})
+		}
+
+		total, err := env.DataStore.Count(env.Auth, env.BaseName, col, filter)
+		if err != nil {
+			return vm.ToValue(Result{Content: fmt.Sprintf("error executing count: %v", err)})
+		}
+
+		return vm.ToValue(Result{OK: true, Content: total})
+	})
+	if err != nil {
+		return err
+	}
+
 	err = vm.Set("update", func(call goja.FunctionCall) goja.Value {
 		if len(call.Arguments) != 3 {
 			return vm.ToValue(Result{Content: "argument missmatch: you need 3 arguments for update(col, id, doc)"})
@@ -405,6 +497,75 @@ func (env *ExecutionEnvironment) addDatabaseFunctions(vm *goja.Runtime) error {
 		return err
 	}
 
+	updateMany := func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 3 {
+			return vm.ToValue(Result{Content: "argument missmatch: you need 3 arguments for updateMany(col, filter, doc)"})
+		}
+		var col string
+		if err := vm.ExportTo(call.Argument(0), &col); err != nil {
+			return vm.ToValue(Result{Content: "the first argument should be a string"})
+		}
+		var clauses [][]interface{}
+		if err := vm.ExportTo(call.Argument(1), &clauses); err != nil {
+			return vm.ToValue(Result{Content: "the second argument should be a query filter: [['field', '==', 'value'], ...]"})
+		}
+		doc := make(map[string]interface{})
+		if err := vm.ExportTo(call.Argument(2), &doc); err != nil {
+			return vm.ToValue(Result{Content: "the third argument should be an object"})
+		}
+
+		filter, err := env.DataStore.ParseQuery(clauses)
+		if err != nil {
+			return vm.ToValue(Result{Content: fmt.Sprintf("error parsing query filter: %v", err)})
+		}
+
+		updated, err := env.DataStore.UpdateDocuments(env.Auth, env.BaseName, col, filter, doc)
+		if err != nil {
+			return vm.ToValue(Result{Content: fmt.Sprintf("error executing updateMany: %v", err)})
+		}
+
+		return vm.ToValue(Result{OK: true, Content: updated})
+	}
+
+	err = vm.Set("updateMany", updateMany)
+	if err != nil {
+		return err
+	}
+	err = vm.Set("updateBulk", updateMany)
+	if err != nil {
+		return err
+	}
+
+	err = vm.Set("incrementValue", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 4 {
+			return vm.ToValue(Result{Content: "argument missmatch: you need 4 arguments for incrementValue(col, id, field, n)"})
+		}
+
+		var col, id, field string
+		var n int
+		if err := vm.ExportTo(call.Argument(0), &col); err != nil {
+			return vm.ToValue(Result{Content: "the first argument should be a string"})
+		}
+		if err := vm.ExportTo(call.Argument(1), &id); err != nil {
+			return vm.ToValue(Result{Content: "the second argument should be a string"})
+		}
+		if err := vm.ExportTo(call.Argument(2), &field); err != nil {
+			return vm.ToValue(Result{Content: "the third argument should be a string"})
+		}
+		if err := vm.ExportTo(call.Argument(3), &n); err != nil {
+			return vm.ToValue(Result{Content: "the fourth argument should be a number"})
+		}
+
+		if err := env.DataStore.IncrementValue(env.Auth, env.BaseName, col, id, field, n); err != nil {
+			return vm.ToValue(Result{Content: fmt.Sprintf("error executing incrementValue: %v", err)})
+		}
+
+		return vm.ToValue(Result{OK: true})
+	})
+	if err != nil {
+		return err
+	}
+
 	err = vm.Set("del", func(call goja.FunctionCall) goja.Value {
 		if len(call.Arguments) != 2 {
 			return vm.ToValue(Result{Content: "argument missmatch: you need 3 arguments for del(col, id)"})
@@ -425,6 +586,59 @@ func (env *ExecutionEnvironment) addDatabaseFunctions(vm *goja.Runtime) error {
 
 		return vm.ToValue(Result{OK: true, Content: deleted})
 	})
+	if err != nil {
+		return err
+	}
+
+	deleteMany := func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 2 {
+			return vm.ToValue(Result{Content: "argument missmatch: you need 2 arguments for deleteMany(col, filter)"})
+		}
+
+		var col string
+		if err := vm.ExportTo(call.Argument(0), &col); err != nil {
+			return vm.ToValue(Result{Content: "the first argument should be a string"})
+		}
+		var clauses [][]interface{}
+		if err := vm.ExportTo(call.Argument(1), &clauses); err != nil {
+			return vm.ToValue(Result{Content: "the second argument should be a query filter: [['field', '==', 'value'], ...]"})
+		}
+
+		filter, err := env.DataStore.ParseQuery(clauses)
+		if err != nil {
+			return vm.ToValue(Result{Content: fmt.Sprintf("error parsing query filter: %v", err)})
+		}
+
+		deleted, err := env.DataStore.DeleteDocuments(env.Auth, env.BaseName, col, filter)
+		if err != nil {
+			return vm.ToValue(Result{Content: fmt.Sprintf("error executing deleteMany: %v", err)})
+		}
+
+		return vm.ToValue(Result{OK: true, Content: deleted})
+	}
+
+	err = vm.Set("deleteMany", deleteMany)
+	if err != nil {
+		return err
+	}
+	err = vm.Set("deleteBulk", deleteMany)
+	if err != nil {
+		return err
+	}
+
+	newID := func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 0 {
+			return vm.ToValue(Result{Content: "argument missmatch: you need 0 arguments for newId()"})
+		}
+
+		return vm.ToValue(Result{OK: true, Content: env.DataStore.NewID()})
+	}
+
+	err = vm.Set("newId", newID)
+	if err != nil {
+		return err
+	}
+	err = vm.Set("newID", newID)
 	if err != nil {
 		return err
 	}
