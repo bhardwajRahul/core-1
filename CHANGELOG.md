@@ -1,5 +1,32 @@
 # Changelog for StaticBackend
 
+### May 16, 2026 v1.7.0
+
+Features:
+
+* Added multi-account user associations with per-account roles.
+* Added endpoints and backend helpers for account/user administration, including
+  changing user emails, changing roles, getting users by id, and issuing auth
+  tokens with root access.
+* Added account creation system events and root server-side function execution
+  for actions across all accounts.
+* Added `updateBulk` and `deleteBulk` to the server-side function runtime.
+* Added file storage usage tracking and file listing per account.
+* Added `contains`, `!contains`, field-to-field query filters, and typed
+  database indexes.
+* Improved full-text search indexing and deletion from server-side functions.
+
+Bug fixes:
+
+* Fixed pagination parameter sanitization.
+* Fixed token expiration checks in auth middleware.
+* Fixed memory database off-by-one behavior.
+* Fixed MongoDB ObjectID handling in account user paths.
+* Fixed Redis pub/sub reconnect behavior after dropped production connections.
+* Fixed email encoding for non ASCII characters.
+* Fixed upload size calculations to use 1024 factors.
+* Cleaned up test runner configuration and linter issues.
+
 ### June 14, 2023 v1.5.0
 
 Features:
