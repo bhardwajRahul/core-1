@@ -217,3 +217,39 @@ func TestCachePublishDocument(t *testing.T) {
 		})
 	}
 }
+
+func TestDevCacheDequeueWorkMissingQueue(t *testing.T) {
+	cache := NewDevCache(logger.Get(config.Current))
+
+	val, err := cache.DequeueWork("missing_queue")
+	if err != nil {
+		t.Fatalf("expected missing work queue to return no error, got %v", err)
+	}
+	if val != "" {
+		t.Fatalf("expected missing work queue to return empty value, got %q", val)
+	}
+}
+
+func TestDevCacheDequeueWorkEmptyQueue(t *testing.T) {
+	cache := NewDevCache(logger.Get(config.Current))
+
+	if err := cache.QueueWork("queue", "work"); err != nil {
+		t.Fatal(err)
+	}
+
+	val, err := cache.DequeueWork("queue")
+	if err != nil {
+		t.Fatalf("expected queued work to dequeue without error, got %v", err)
+	}
+	if val != "work" {
+		t.Fatalf("expected queued work value, got %q", val)
+	}
+
+	val, err = cache.DequeueWork("queue")
+	if err != nil {
+		t.Fatalf("expected empty work queue to return no error, got %v", err)
+	}
+	if val != "" {
+		t.Fatalf("expected empty work queue to return empty value, got %q", val)
+	}
+}

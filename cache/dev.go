@@ -12,6 +12,9 @@ import (
 	"github.com/staticbackendhq/core/model"
 )
 
+// ErrKeyNotFound is returned when a cache key does not exist.
+var ErrKeyNotFound = errors.New("key not found in cache")
+
 // CacheDev used in local dev mode and is memory-based
 type CacheDev struct {
 	data     map[string]string
@@ -37,7 +40,7 @@ func (d *CacheDev) Get(key string) (val string, err error) {
 
 	val, ok := d.data[key]
 	if !ok {
-		err = errors.New("key not found in cache")
+		err = ErrKeyNotFound
 	}
 	return
 }
@@ -83,7 +86,7 @@ func (d *CacheDev) SetTyped(key string, v any) error {
 // Inc increments a value (non-atomic)
 func (d *CacheDev) Inc(key string, by int64) (n int64, err error) {
 	if err = d.GetTyped(key, &n); err != nil {
-		if err.Error() == "key not found in cache" {
+		if errors.Is(err, ErrKeyNotFound) {
 			n = 0
 		} else {
 			return
@@ -249,6 +252,9 @@ func (d *CacheDev) QueueWork(key, value string) error {
 func (d *CacheDev) DequeueWork(key string) (val string, err error) {
 	var queue []string
 	if err = d.GetTyped(key, &queue); err != nil {
+		if errors.Is(err, ErrKeyNotFound) {
+			err = nil
+		}
 		return
 	} else if len(queue) == 0 {
 		return
