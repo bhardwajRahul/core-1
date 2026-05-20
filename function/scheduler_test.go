@@ -1,0 +1,191 @@
+package function
+
+import (
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/staticbackendhq/core/cache"
+	"github.com/staticbackendhq/core/config"
+	"github.com/staticbackendhq/core/database"
+	"github.com/staticbackendhq/core/database/memory"
+	"github.com/staticbackendhq/core/logger"
+	"github.com/staticbackendhq/core/model"
+)
+
+func TestTaskSchedulerUsesRootAuthForFunctionTask(t *testing.T) {
+	baseName := fmt.Sprintf("sched_%d", time.Now().UnixNano())
+	ds, rootAuth := newSchedulerTestStore(t, baseName)
+	vol := cache.NewDevCache(logger.Get(config.LoadConfig()))
+
+	fn := model.ExecData{
+		FunctionName: "scheduled-create",
+		TriggerTopic: "schedule",
+		Code: `function handle(channel, type, data) {
+			var result = create("scheduled_runs", { name: data.name });
+			if (!result.ok) {
+				log("ERROR: " + result.content);
+			}
+		}`,
+		Version: 1,
+	}
+	fnID, err := ds.AddFunction(baseName, fn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn.ID = fnID
+
+	ts := &TaskScheduler{
+		Volatile:  vol,
+		DataStore: ds,
+		Log:       logger.Get(config.LoadConfig()),
+	}
+	task := model.Task{
+		ID:       "task-root-auth",
+		Name:     "daily-root-auth",
+		Type:     model.TaskTypeFunction,
+		Value:    fn.FunctionName,
+		Meta:     `{"data":"{\"name\":\"from schedule\"}"}`,
+		Interval: "0 1 * * *",
+		BaseName: baseName,
+	}
+
+	ts.run(task)
+
+	var cached taskAuthCache
+	if err := vol.GetTyped("root:"+baseName, &cached); err != nil {
+		t.Fatal(err)
+	}
+	if cached.AccountID != rootAuth.AccountID || cached.UserID != rootAuth.UserID || cached.Token != rootAuth.Token {
+		t.Fatalf("scheduler cached wrong root auth: got %+v want %+v", cached, rootAuth)
+	}
+
+	result, err := ds.ListDocuments(rootAuth, baseName, "scheduled_runs", model.ListParams{Page: 1, Size: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Total != 1 {
+		t.Fatalf("expected one scheduled run document, got %d", result.Total)
+	}
+	doc := result.Results[0]
+	if doc["accountId"] != rootAuth.AccountID {
+		t.Fatalf("expected document accountId %q got %v", rootAuth.AccountID, doc["accountId"])
+	}
+	if doc["ownerId"] != rootAuth.UserID {
+		t.Fatalf("expected document ownerId %q got %v", rootAuth.UserID, doc["ownerId"])
+	}
+
+	waitForFunctionHistory(t, ds, baseName, fn.FunctionName)
+
+	msgs := make(chan model.Command, 1)
+	done := make(chan bool)
+	defer close(done)
+	go vol.Subscribe(msgs, rootAuth.ReconstructToken(), "scheduled-events", done)
+
+	ts.run(model.Task{
+		ID:       "task-root-message",
+		Name:     "root-message",
+		Type:     model.TaskTypeMessage,
+		Value:    "scheduled.event",
+		Meta:     `{"data":"{}","channel":"scheduled-events"}`,
+		Interval: "0 1 * * *",
+		BaseName: baseName,
+	})
+
+	select {
+	case msg := <-msgs:
+		if msg.Token != rootAuth.ReconstructToken() {
+			t.Fatalf("expected published token %q got %q", rootAuth.ReconstructToken(), msg.Token)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for scheduled message")
+	}
+}
+
+func TestTaskSchedulerAddAndCancelOnTheFly(t *testing.T) {
+	ts := &TaskScheduler{Log: logger.Get(config.LoadConfig())}
+	task := model.Task{
+		ID:       "task-on-the-fly",
+		Name:     "on-the-fly",
+		Type:     model.TaskTypeMessage,
+		Value:    "noop",
+		Interval: "0 1 * * *",
+	}
+
+	ts.AddOnTheFly(task)
+	if ts.Scheduler == nil {
+		t.Fatal("expected AddOnTheFly to initialize scheduler")
+	}
+	if got := ts.Scheduler.Len(); got != 1 {
+		t.Fatalf("expected one scheduled job, got %d", got)
+	}
+
+	if err := ts.CancelTask(task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := ts.Scheduler.Len(); got != 0 {
+		t.Fatalf("expected no scheduled jobs after cancel, got %d", got)
+	}
+}
+
+func newSchedulerTestStore(t *testing.T, baseName string) (database.Persister, model.Auth) {
+	t.Helper()
+
+	ds := memory.New(func(model.Auth, string, string, string, interface{}) {})
+	tenant, err := ds.CreateTenant(model.Tenant{ID: baseName, Email: baseName + "@test.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ds.CreateDatabase(model.DatabaseConfig{
+		ID:       baseName,
+		TenantID: tenant.ID,
+		Name:     baseName,
+		IsActive: true,
+		Created:  time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	accountID, err := ds.CreateAccount(baseName, baseName+"@test.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := model.User{
+		AccountID: accountID,
+		Email:     baseName + "@test.com",
+		Token:     "root-token-" + baseName,
+		Role:      100,
+	}
+	userID, err := ds.CreateUser(baseName, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return ds, model.Auth{
+		AccountID: accountID,
+		UserID:    userID,
+		Email:     user.Email,
+		Role:      user.Role,
+		Token:     user.Token,
+	}
+}
+
+func waitForFunctionHistory(t *testing.T, ds database.Persister, baseName, functionName string) {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		fn, err := ds.GetFunctionByName(baseName, functionName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(fn.History) > 0 {
+			if !fn.History[len(fn.History)-1].Success {
+				t.Fatalf("expected successful function execution history, got %+v", fn.History[len(fn.History)-1])
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for scheduled function execution history")
+}

@@ -29,14 +29,31 @@ type TaskScheduler struct {
 	Scheduler *gocron.Scheduler
 }
 
+type taskAuthCache struct {
+	AccountID string `json:"accountId"`
+	UserID    string `json:"userId"`
+	Email     string `json:"email"`
+	Role      int    `json:"role"`
+	Token     string `json:"token"`
+}
+
+func (t taskAuthCache) auth() model.Auth {
+	return model.Auth{
+		AccountID: t.AccountID,
+		UserID:    t.UserID,
+		Email:     t.Email,
+		Role:      t.Role,
+		Token:     t.Token,
+	}
+}
+
 func (ts *TaskScheduler) Start() {
 	tasks, err := ts.DataStore.ListTasks()
 	if err != nil {
 		ts.Log.Error().Err(err).Msg("error loading tasks")
 		return
 	}
-	ts.Scheduler = gocron.NewScheduler(time.UTC)
-	ts.Scheduler.TagsUnique()
+	ts.ensureScheduler()
 
 	for _, task := range tasks {
 		_, err := ts.Scheduler.Cron(task.Interval).Tag(task.ID).Do(ts.run, task)
@@ -49,6 +66,7 @@ func (ts *TaskScheduler) Start() {
 }
 
 func (ts *TaskScheduler) AddOnTheFly(task model.Task) {
+	ts.ensureScheduler()
 	_, err := ts.Scheduler.Cron(task.Interval).Tag(task.ID).Do(ts.run, task)
 	if err != nil {
 		ts.Log.Error().Err(err).Msgf("error scheduling this task: %s", task.ID)
@@ -56,7 +74,16 @@ func (ts *TaskScheduler) AddOnTheFly(task model.Task) {
 }
 
 func (ts *TaskScheduler) CancelTask(id string) error {
+	ts.ensureScheduler()
 	return ts.Scheduler.RemoveByTag(id)
+}
+
+func (ts *TaskScheduler) ensureScheduler() {
+	if ts.Scheduler != nil {
+		return
+	}
+	ts.Scheduler = gocron.NewScheduler(time.UTC)
+	ts.Scheduler.TagsUnique()
 }
 
 func (ts *TaskScheduler) run(task model.Task) {
@@ -64,7 +91,10 @@ func (ts *TaskScheduler) run(task model.Task) {
 
 	// the task must run as the root base user
 	var auth model.Auth
-	if err := ts.Volatile.GetTyped("root:"+task.BaseName, &auth); err != nil {
+	var cachedAuth taskAuthCache
+	if err := ts.Volatile.GetTyped("root:"+task.BaseName, &cachedAuth); err == nil {
+		auth = cachedAuth.auth()
+	} else {
 		tok, err := ts.DataStore.GetRootForBase(task.BaseName)
 		if err != nil {
 			ts.Log.Error().Err(err).Msgf("error finding root token for base %s", task.BaseName)
@@ -80,7 +110,13 @@ func (ts *TaskScheduler) run(task model.Task) {
 			Token:     tok.Token,
 		}
 
-		if err := ts.Volatile.SetTyped("root:"+task.BaseName, auth); err != nil {
+		if err := ts.Volatile.SetTyped("root:"+task.BaseName, taskAuthCache{
+			AccountID: auth.AccountID,
+			UserID:    auth.UserID,
+			Email:     auth.Email,
+			Role:      auth.Role,
+			Token:     auth.Token,
+		}); err != nil {
 			ts.Log.Error().Err(err).Msg("error setting auth inside TaskScheduler.run")
 			return
 		}

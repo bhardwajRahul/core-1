@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"database/sql"
 	"fmt"
 
 	"github.com/staticbackendhq/core/model"
@@ -41,11 +42,27 @@ func (sl *SQLite) ListTasksByBase(dbName string) (results []model.Task, err erro
 		if err = scanTask(rows, &t); err != nil {
 			return
 		}
+		t.BaseName = dbName
 
 		results = append(results, t)
 	}
 
 	err = rows.Err()
+	return
+}
+
+func (sl *SQLite) GetTask(dbName, id string) (task model.Task, err error) {
+	qry := fmt.Sprintf(`
+		SELECT *
+		FROM %s_sb_tasks
+		WHERE id = $1
+	`, dbName)
+
+	err = scanTask(sl.DB.QueryRow(qry, id), &task)
+	if err == sql.ErrNoRows {
+		err = fmt.Errorf("task not found: %s", id)
+	}
+	task.BaseName = dbName
 	return
 }
 
@@ -68,6 +85,26 @@ func (sl *SQLite) AddTask(dbName string, task model.Task) (id string, err error)
 		task.LastRun,
 	)
 	return
+}
+
+func (sl *SQLite) UpdateTask(dbName string, task model.Task) error {
+	qry := fmt.Sprintf(`
+	UPDATE %s_sb_tasks
+	SET name = $2, type = $3, value = $4, meta = $5, interval = $6, last_run = $7
+	WHERE id = $1;
+	`, dbName)
+
+	_, err := sl.DB.Exec(
+		qry,
+		task.ID,
+		task.Name,
+		task.Type,
+		task.Value,
+		task.Meta,
+		task.Interval,
+		task.LastRun,
+	)
+	return err
 }
 
 func (sl *SQLite) DeleteTask(dbName, id string) error {

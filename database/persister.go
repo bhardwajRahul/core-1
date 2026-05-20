@@ -185,8 +185,12 @@ type Persister interface {
 	ListTasks() ([]model.Task, error)
 	// ListTasksByBase returns the tasks for a specific database
 	ListTasksByBase(dbName string) ([]model.Task, error)
+	// GetTask returns a scheduled task by its ID
+	GetTask(dbName, id string) (model.Task, error)
 	// AddTask inserts a new task in the reserved sb_tasks collection
 	AddTask(string, model.Task) (string, error)
+	// UpdateTask updates a task in the reserved sb_tasks collection
+	UpdateTask(dbName string, task model.Task) error
 	// DeleteTask removes a task from the reserved sb_tasks collection
 	DeleteTask(dbName, id string) error
 

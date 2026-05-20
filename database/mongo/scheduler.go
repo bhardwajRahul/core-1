@@ -15,7 +15,8 @@ type LocalTask struct {
 	Type     string             `bson:"type" json:"type"`
 	Value    string             `bson:"value" json:"value"`
 	Meta     string             `bson:"meta" json:"meta"`
-	Interval string             `bson:"invertal" json:"interval"`
+	Interval string             `bson:"interval" json:"interval"`
+	OldInt   string             `bson:"invertal,omitempty" json:"-"`
 	LastRun  time.Time          `bson:"last" json:"last"`
 
 	BaseName string `bson:"-" json:"base"`
@@ -39,13 +40,18 @@ func toLocalTask(t model.Task) LocalTask {
 }
 
 func fromLocalTask(lt LocalTask) model.Task {
+	interval := lt.Interval
+	if len(interval) == 0 {
+		interval = lt.OldInt
+	}
+
 	return model.Task{
 		ID:       lt.ID.Hex(),
 		Name:     lt.Name,
 		Type:     lt.Type,
 		Value:    lt.Value,
 		Meta:     lt.Meta,
-		Interval: lt.Interval,
+		Interval: interval,
 		LastRun:  lt.LastRun,
 		BaseName: lt.BaseName,
 	}
@@ -105,6 +111,22 @@ func (mg *Mongo) ListTasksByBase(dbName string) ([]model.Task, error) {
 	return tasks, nil
 }
 
+func (mg *Mongo) GetTask(dbName, id string) (model.Task, error) {
+	db := mg.Client.Database(dbName)
+
+	oid, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return model.Task{}, err
+	}
+
+	var t LocalTask
+	if err := db.Collection("sb_tasks").FindOne(mg.Ctx, bson.M{FieldID: oid}).Decode(&t); err != nil {
+		return model.Task{}, err
+	}
+	t.BaseName = dbName
+	return fromLocalTask(t), nil
+}
+
 func (mg *Mongo) AddTask(dbName string, task model.Task) (string, error) {
 	db := mg.Client.Database(dbName)
 
@@ -115,6 +137,19 @@ func (mg *Mongo) AddTask(dbName string, task model.Task) (string, error) {
 	}
 
 	return task.ID, nil
+}
+
+func (mg *Mongo) UpdateTask(dbName string, task model.Task) error {
+	db := mg.Client.Database(dbName)
+
+	oid, err := primitive.ObjectIDFromHex(task.ID)
+	if err != nil {
+		return err
+	}
+
+	v := toLocalTask(task)
+	_, err = db.Collection("sb_tasks").ReplaceOne(mg.Ctx, bson.M{FieldID: oid}, v)
+	return err
 }
 
 func (mg *Mongo) DeleteTask(dbName, id string) error {

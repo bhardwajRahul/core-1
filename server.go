@@ -227,6 +227,11 @@ func Start(c config.AppConfig, log *logger.Logger) {
 	http.Handle("/fn/exec/", middleware.Chain(http.HandlerFunc(f.exec), stdAuth...))
 	http.Handle("/fn", middleware.Chain(http.HandlerFunc(f.list), stdRoot...))
 
+	// schedule tasks
+	t := tasks{}
+	http.Handle("/task/", middleware.Chain(http.HandlerFunc(t.item), stdRoot...))
+	http.Handle("/task", middleware.Chain(http.HandlerFunc(t.listAdd), stdRoot...))
+
 	// pubsub
 	http.Handle("/publish-message", middleware.Chain(http.HandlerFunc(publishMessage), stdRoot...))
 

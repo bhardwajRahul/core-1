@@ -38,11 +38,11 @@ const (
 type Task struct {
 	ID       string    `json:"id"`
 	Name     string    `json:"name"`
-	Type     string    ` json:"type"`
-	Value    string    ` json:"value"`
-	Meta     string    ` json:"meta"`
-	Interval string    ` json:"interval"`
-	LastRun  time.Time ` json:"last"`
+	Type     string    `json:"type"`
+	Value    string    `json:"value"`
+	Meta     string    `json:"meta"`
+	Interval string    `json:"interval"`
+	LastRun  time.Time `json:"last"`
 
 	BaseName string `json:"base"`
 }
