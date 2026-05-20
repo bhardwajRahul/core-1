@@ -2,7 +2,6 @@ package postgresql
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/lib/pq"
 	"github.com/staticbackendhq/core/model"
@@ -208,7 +207,7 @@ func (pg *PostgreSQL) RanFunction(dbName, id string, rh model.ExecHistory) error
 		WHERE id = $1
 	`, dbName)
 
-	if _, err := pg.DB.Exec(qry, id, time.Now()); err != nil {
+	if _, err := pg.DB.Exec(qry, id, rh.Completed); err != nil {
 		return err
 	}
 

@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/lib/pq"
 	"github.com/staticbackendhq/core/model"
@@ -210,7 +209,7 @@ func (sl *SQLite) RanFunction(dbName, id string, rh model.ExecHistory) error {
 		WHERE id = $1
 	`, dbName)
 
-	if _, err := sl.DB.Exec(qry, id, time.Now()); err != nil {
+	if _, err := sl.DB.Exec(qry, id, rh.Completed); err != nil {
 		return err
 	}
 

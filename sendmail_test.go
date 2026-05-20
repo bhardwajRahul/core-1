@@ -37,6 +37,10 @@ func Test_Sendmail(t *testing.T) {
 }
 
 func TestSendMailWithAttachment(t *testing.T) {
+	if !strings.EqualFold(config.Current.MailProvider, email.MailProviderLocal) {
+		t.Skip("Mailpit attachment verification requires MAIL_PROVIDER=local")
+	}
+
 	// Create email data with attachment
 	data := email.SendMailData{
 		FromName:        config.Current.FromName,

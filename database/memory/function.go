@@ -106,6 +106,7 @@ func (m *Memory) RanFunction(dbName, id string, rh model.ExecHistory) error {
 		return err
 	}
 
+	exists.LastRun = rh.Completed
 	exists.History = append(exists.History, rh)
 
 	return create(m, dbName, "sb_functions", id, exists)

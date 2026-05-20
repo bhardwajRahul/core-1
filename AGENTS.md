@@ -15,7 +15,11 @@ in focused packages: `database/` (`memory`, `sqlite`, `postgresql`, `mongo`),
 - `make build`: builds `cmd/staticbackend` with version metadata.
 - `make plugin`: builds the `topdf` Go plugin.
 - `make start`: builds the binary and plugin, then starts the local server.
+- `make test-local`: runs the main local regression suite using the default
+  memory/SQLite setup and no external PostgreSQL, MongoDB, Redis, or S3
+  services.
 - `make alltest`: runs `go test --cover ./...` after clearing the test cache.
+  This includes provider packages that expect external services.
 - `make test-core`: runs root package tests after removing generated local
   database and search files.
 - `make test-ci-local-clean`: runs the Docker-backed local CI suite and cleans
@@ -35,11 +39,14 @@ interfaces and provider patterns before adding abstractions.
 ## Testing Guidelines
 
 Tests use Go's standard `testing` package. Add or update tests for behavior
-changes, especially shared API paths and database/cache providers. Run the
-narrowest relevant target first, such as `make test-search` or
-`make test-sqlite`, then `make alltest` or `make test-ci-local-clean` for larger
-changes. Some integration tests require Docker or local PostgreSQL, MongoDB, and
-Redis.
+changes, especially shared API paths and database/cache providers. The default
+`.env` is intentionally local-only (`DATABASE_URL=mem`, `DATA_STORE=memory`,
+`REDIS_HOST=mem`, local storage) so agents and contributors can run bug-fix
+checks without external services. Run the narrowest relevant target first, such
+as `make test-search`, `make test-sqlite`, or a focused `go test ./function`;
+then run `make test-local` for broader local coverage. Use `make alltest` only
+when provider services are available, or `make test-ci-local-clean` to start the
+Docker-backed PostgreSQL, MongoDB, Redis, and Mailpit stack.
 
 ## Commit & Pull Request Guidelines
 

@@ -165,18 +165,22 @@ func TestCrossAccountUserAssociation(t *testing.T) {
 		t.Fatal(GetResponseBody(t, resp))
 	}
 
-	var assoc model.AccountUser
-	if err := json.NewDecoder(resp.Body).Decode(&assoc); err != nil {
+	var associatedUser model.User
+	if err := json.NewDecoder(resp.Body).Decode(&associatedUser); err != nil {
 		t.Fatal("decoding response:", err)
 	}
-	if len(assoc.Token) == 0 {
+	if len(associatedUser.Token) == 0 {
 		t.Error("expected a non-empty association token")
 	}
-	if assoc.Email != crossEmail {
-		t.Errorf("expected email %s got %s", crossEmail, assoc.Email)
+	if associatedUser.Email != crossEmail {
+		t.Errorf("expected email %s got %s", crossEmail, associatedUser.Email)
 	}
 
 	// clean up
+	assoc, err := backend.DB.GetAccountUser(dbName, associatedUser.ID, testAccountID)
+	if err != nil {
+		t.Fatal("finding association for cleanup:", err)
+	}
 	if err := backend.DB.DeleteAccountUser(dbName, assoc.ID); err != nil {
 		t.Fatal("cleanup failed:", err)
 	}

@@ -272,7 +272,7 @@ func (mg *Mongo) RanFunction(dbName, id string, rh model.ExecHistory) error {
 
 	filter := bson.M{FieldID: oid}
 	update := bson.M{
-		"$set":  bson.M{"lr": time.Now()},
+		"$set":  bson.M{"lr": rh.Completed},
 		"$push": bson.M{"h": leh},
 	}
 	res := db.Collection("sb_functions").FindOneAndUpdate(mg.Ctx, filter, update)

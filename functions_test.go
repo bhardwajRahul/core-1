@@ -395,7 +395,12 @@ func TestFunctionTriggerByDBChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Log(checkFn.History)
+	if len(checkFn.History) == 0 {
+		t.Fatal("expected db-triggered function history to be recorded")
+	}
+	if checkFn.LastRun.IsZero() {
+		t.Fatal("expected db-triggered function last run time to be set")
+	}
 
 	var errorLines []string
 	foundError := false

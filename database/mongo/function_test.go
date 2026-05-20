@@ -196,4 +196,7 @@ func TestRanFunction(t *testing.T) {
 	} else if !fn.History[0].Success || fn.History[0].Version != 1 {
 		t.Errorf("expected history[0] to have succeeded and version at 1 got %v", fn.History[0])
 	}
+	if fn.LastRun.IsZero() {
+		t.Fatal("expected last run time to be set")
+	}
 }

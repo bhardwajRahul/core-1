@@ -81,6 +81,7 @@ func TestTaskSchedulerUsesRootAuthForFunctionTask(t *testing.T) {
 	done := make(chan bool)
 	defer close(done)
 	go vol.Subscribe(msgs, rootAuth.ReconstructToken(), "scheduled-events", done)
+	time.Sleep(10 * time.Millisecond)
 
 	ts.run(model.Task{
 		ID:       "task-root-message",
@@ -180,6 +181,9 @@ func waitForFunctionHistory(t *testing.T, ds database.Persister, baseName, funct
 			t.Fatal(err)
 		}
 		if len(fn.History) > 0 {
+			if fn.LastRun.IsZero() {
+				t.Fatal("expected scheduled function to set last run time")
+			}
 			if !fn.History[len(fn.History)-1].Success {
 				t.Fatalf("expected successful function execution history, got %+v", fn.History[len(fn.History)-1])
 			}

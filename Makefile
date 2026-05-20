@@ -1,4 +1,5 @@
 ENV_FILE ?= .env
+GO_TEST_ENV ?= GOCACHE=/tmp/go-build
 DOCKER_COMPOSE ?= $(shell if docker compose version >/dev/null 2>&1; then echo docker compose; else echo docker-compose; fi)
 TEST_COMPOSE_PROJECT ?= staticbackend-test
 TEST_COMPOSE_FILE ?= docker-compose-unittest.yml
@@ -26,6 +27,10 @@ start: build plugin
 
 alltest:
 	@go clean -testcache && go test --cover ./...
+
+test-local: cleanup
+	@$(GO_TEST_ENV) go clean -testcache
+	@$(GO_TEST_ENV) go test --cover . ./backend/... ./database/memory ./database/sqlite ./email ./extra ./function ./internal ./internal/query ./model ./search ./storage
 
 thistest:
 	go test -run $(TESTNAME) --cover
