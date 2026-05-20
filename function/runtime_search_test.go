@@ -2,7 +2,9 @@ package function
 
 import (
 	"fmt"
+	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -164,6 +166,114 @@ func TestRuntimeBulkDatabaseHelpers(t *testing.T) {
 	}
 
 	assertFunctionCompleted(t, ctx.datastore, ctx.fn.ID)
+}
+
+func TestRuntimeCommandArgumentsFromDecodedWrapper(t *testing.T) {
+	code := `
+	function fail(message) {
+		throw new Error(message);
+	}
+
+	function handle(channel, type, data) {
+		if (channel !== "db-contacts") {
+			fail("expected channel db-contacts, got " + channel);
+		}
+		if (type !== "db_updated") {
+			fail("expected type db_updated, got " + type);
+		}
+		if (!data || data.id !== "contact_1") {
+			fail("expected data.id contact_1, got " + JSON.stringify(data));
+		}
+
+		var created = create("argument_checks", {
+			sourceChannel: channel,
+			sourceType: type,
+			sourceId: data.id,
+			sourceEmail: data.email
+		});
+		if (!created.ok) {
+			fail("create failed: " + created.content);
+		}
+	}`
+
+	ctx := newRuntimeTestContext(t, "command-args", code)
+	err := ctx.env.Execute(map[string]any{
+		"channel": "db-contacts",
+		"type":    model.MsgTypeDBUpdated,
+		"data": map[string]any{
+			"id":    "contact_1",
+			"email": "alice@example.com",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertFunctionCompleted(t, ctx.datastore, ctx.fn.ID)
+
+	result, err := ctx.datastore.ListDocuments(ctx.env.Auth, ctx.env.BaseName, "argument_checks", model.ListParams{Page: 1, Size: 25})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Total != 1 {
+		t.Fatalf("expected one argument check document, got %d", result.Total)
+	}
+	if result.Results[0]["sourceId"] != "contact_1" {
+		t.Fatalf("expected sourceId contact_1, got %v", result.Results[0]["sourceId"])
+	}
+}
+
+func TestRuntimeHTTPArgumentsIncludeBodyQueryAndHeaders(t *testing.T) {
+	code := `
+	function fail(message) {
+		throw new Error(message);
+	}
+
+	function handle(body, query, headers) {
+		if (!body || body.contactId !== "contact_1") {
+			fail("expected JSON body contactId contact_1, got " + JSON.stringify(body));
+		}
+		if (!query || query.source[0] !== "crm") {
+			fail("expected source query string, got " + JSON.stringify(query));
+		}
+		if (!query.tag || query.tag.length !== 2 || query.tag[0] !== "lead" || query.tag[1] !== "vip") {
+			fail("expected repeated tag query string, got " + JSON.stringify(query.tag));
+		}
+		if (!headers || headers["X-Trace-Id"][0] !== "trace-123") {
+			fail("expected X-Trace-Id header, got " + JSON.stringify(headers));
+		}
+
+		var created = create("http_argument_checks", {
+			contactId: body.contactId,
+			source: query.source[0],
+			traceId: headers["X-Trace-Id"][0]
+		});
+		if (!created.ok) {
+			fail("create failed: " + created.content);
+		}
+	}`
+
+	ctx := newRuntimeTestContext(t, "http-args", code)
+	req := httptest.NewRequest("POST", "/fn/exec/http-args?source=crm&tag=lead&tag=vip", strings.NewReader(`{"contactId":"contact_1"}`))
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.Header.Set("X-Trace-Id", "trace-123")
+
+	if err := ctx.env.Execute(req); err != nil {
+		t.Fatal(err)
+	}
+
+	assertFunctionCompleted(t, ctx.datastore, ctx.fn.ID)
+
+	result, err := ctx.datastore.ListDocuments(ctx.env.Auth, ctx.env.BaseName, "http_argument_checks", model.ListParams{Page: 1, Size: 25})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Total != 1 {
+		t.Fatalf("expected one HTTP argument check document, got %d", result.Total)
+	}
+	if result.Results[0]["traceId"] != "trace-123" {
+		t.Fatalf("expected traceId trace-123, got %v", result.Results[0]["traceId"])
+	}
 }
 
 func TestRuntimeSearchHelpers(t *testing.T) {

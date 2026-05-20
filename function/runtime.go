@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"strings"
 	"time"
@@ -97,14 +98,18 @@ func (env *ExecutionEnvironment) prepareArguments(vm *goja.Runtime, data interfa
 		defer r.Body.Close()
 
 		// let's ready the HTTP body
-		if strings.EqualFold(r.Header.Get("Content-Type"), "application/json") {
+		contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		if err != nil {
+			contentType = r.Header.Get("Content-Type")
+		}
+		if strings.EqualFold(contentType, "application/json") {
 			var v interface{}
 			if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
 				return nil, err
 			}
 
 			args = append(args, vm.ToValue(v))
-		} else if r.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
+		} else if strings.EqualFold(contentType, "application/x-www-form-urlencoded") {
 			if err := r.ParseForm(); err != nil {
 				return nil, err
 			}
@@ -116,29 +121,104 @@ func (env *ExecutionEnvironment) prepareArguments(vm *goja.Runtime, data interfa
 			args = append(args, vm.ToValue(val))
 		}
 
-		args = append(args, vm.ToValue(r.URL.Query()))
-		args = append(args, vm.ToValue(r.Header))
+		args = append(args, vm.ToValue(valuesToMap(r.URL.Query())))
+		args = append(args, vm.ToValue(valuesToMap(r.Header)))
 
 		return args, nil
 	}
 
 	msg, ok := data.(model.Command)
 	if ok {
-		var v any
-		if err := json.Unmarshal([]byte(msg.Data), &v); err != nil {
-			return args, err
-		}
+		return env.prepareCommandArguments(vm, msg)
+	}
 
-		args = append(args, vm.ToValue(msg.Channel))
-		args = append(args, vm.ToValue(msg.Type))
-		args = append(args, vm.ToValue(v))
+	msgPtr, ok := data.(*model.Command)
+	if ok && msgPtr != nil {
+		return env.prepareCommandArguments(vm, *msgPtr)
+	}
 
-		return args, nil
+	if msg, ok := commandFromMap(data); ok {
+		return env.prepareCommandArguments(vm, msg)
 	}
 
 	// system or custom event/topic, we send only the 1st argument (body)
 	args = append(args, vm.ToValue(data))
 	return args, nil
+}
+
+func (env *ExecutionEnvironment) prepareCommandArguments(vm *goja.Runtime, msg model.Command) ([]goja.Value, error) {
+	args := make([]goja.Value, 0, 3)
+	var v any
+	if err := json.Unmarshal([]byte(msg.Data), &v); err != nil {
+		return args, err
+	}
+
+	args = append(args, vm.ToValue(msg.Channel))
+	args = append(args, vm.ToValue(msg.Type))
+	args = append(args, vm.ToValue(v))
+
+	return args, nil
+}
+
+func commandFromMap(data interface{}) (model.Command, bool) {
+	values, ok := data.(map[string]interface{})
+	if !ok {
+		valuesAny, ok := data.(map[string]any)
+		if !ok {
+			return model.Command{}, false
+		}
+		values = valuesAny
+	}
+
+	typ, ok := stringFromMap(values, "type")
+	if !ok {
+		return model.Command{}, false
+	}
+
+	payload, ok := values["data"]
+	if !ok {
+		return model.Command{}, false
+	}
+
+	dataString, ok := payload.(string)
+	if !ok {
+		b, err := json.Marshal(payload)
+		if err != nil {
+			return model.Command{}, false
+		}
+		dataString = string(b)
+	}
+
+	channel, _ := stringFromMap(values, "channel")
+	base, _ := stringFromMap(values, "base")
+	token, _ := stringFromMap(values, "token")
+	sid, _ := stringFromMap(values, "sid")
+
+	return model.Command{
+		SID:     sid,
+		Type:    typ,
+		Data:    dataString,
+		Channel: channel,
+		Token:   token,
+		Base:    base,
+	}, true
+}
+
+func stringFromMap(values map[string]interface{}, key string) (string, bool) {
+	value, ok := values[key]
+	if !ok {
+		return "", false
+	}
+	str, ok := value.(string)
+	return str, ok
+}
+
+func valuesToMap(values map[string][]string) map[string]any {
+	result := make(map[string]any, len(values))
+	for key, value := range values {
+		result[key] = value
+	}
+	return result
 }
 
 func (env *ExecutionEnvironment) addHelpers(vm *goja.Runtime) error {
