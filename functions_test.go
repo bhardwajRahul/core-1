@@ -232,6 +232,109 @@ func TestFunctionsExecuteDBOperations(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 }
 
+func TestFunctionSudoExecUsesRootAuth(t *testing.T) {
+	code := `
+	function handle() {
+		var listed = list("contacts", { Page: 1, Size: 25 });
+		if (!listed.ok) {
+			log("ERROR: " + listed.content);
+			return;
+		}
+		log("contacts total: " + listed.content.total);
+		log("contacts listed: " + listed.content.results.length);
+	}
+	`
+
+	fn := model.ExecData{
+		FunctionName: "fn-test-sudoexec-root-auth",
+		Code:         code,
+		TriggerTopic: "web",
+	}
+	addResp := dbReq(t, funexec.add, "POST", "/", fn, true)
+	defer addResp.Body.Close()
+	if addResp.StatusCode != http.StatusOK {
+		t.Fatal(GetResponseBody(t, addResp))
+	}
+
+	accountUserID, err := backend.DB.CreateUser(dbName, model.User{
+		AccountID: testAccountID,
+		Email:     "sudoexec-account-user@test.com",
+		Token:     backend.DB.NewID(),
+		Role:      0,
+		Created:   time.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	otherAccountID, err := backend.DB.CreateAccount(dbName, "sudoexec-other-account@test.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherUserID, err := backend.DB.CreateUser(dbName, model.User{
+		AccountID: otherAccountID,
+		Email:     "sudoexec-other-user@test.com",
+		Token:     backend.DB.NewID(),
+		Role:      0,
+		Created:   time.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	contacts := []model.Auth{
+		{
+			AccountID: testAccountID,
+			UserID:    accountUserID,
+			Role:      0,
+		},
+		{
+			AccountID: otherAccountID,
+			UserID:    otherUserID,
+			Role:      0,
+		},
+	}
+	for i, auth := range contacts {
+		if _, err := backend.DB.CreateDocument(auth, dbName, "contacts", map[string]interface{}{
+			"firstName": "SudoExec",
+			"lastName":  i,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	execResp := dbReq(t, funexec.exec, "POST", "/fn/sudoexec/fn-test-sudoexec-root-auth", map[string]interface{}{}, true)
+	defer execResp.Body.Close()
+	if execResp.StatusCode != http.StatusOK {
+		t.Fatal(GetResponseBody(t, execResp))
+	}
+
+	var checkFn model.ExecData
+	for i := 0; i < 50; i++ {
+		infoResp := dbReq(t, funexec.info, "GET", "/fn/info/fn-test-sudoexec-root-auth", nil, true)
+		if infoResp.StatusCode != http.StatusOK {
+			t.Fatal(GetResponseBody(t, infoResp))
+		}
+		if err := parseBody(infoResp.Body, &checkFn); err != nil {
+			t.Fatal(err)
+		}
+		infoResp.Body.Close()
+
+		if len(checkFn.History) > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(checkFn.History) == 0 {
+		t.Fatal("function run history was not recorded")
+	}
+
+	output := strings.Join(checkFn.History[len(checkFn.History)-1].Output, "\n")
+	if !strings.Contains(output, "contacts listed: 2") {
+		t.Fatalf("expected root function to list contacts from both accounts, got output:\n%s", output)
+	}
+}
+
 func TestFunctionTriggerByDBChanges(t *testing.T) {
 	code := `
 	function handle(channel, type, data) {

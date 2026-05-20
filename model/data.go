@@ -28,10 +28,10 @@ type PagedResult struct {
 }
 
 type ListParams struct {
-	Page           int64
-	Size           int64
-	SortBy         string
-	SortDescending bool
+	Page           int64  `json:"page"`
+	Size           int64  `json:"size"`
+	SortBy         string `json:"sortBy"`
+	SortDescending bool   `json:"desc"`
 }
 
 var (

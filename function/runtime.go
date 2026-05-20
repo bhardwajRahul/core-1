@@ -221,6 +221,115 @@ func valuesToMap(values map[string][]string) map[string]any {
 	return result
 }
 
+func listParamsFromValue(vm *goja.Runtime, v goja.Value) (model.ListParams, error) {
+	var params model.ListParams
+
+	obj := v.ToObject(vm)
+	if n, ok, err := int64Property(obj, "page", "Page"); err != nil {
+		return params, err
+	} else if ok {
+		params.Page = n
+	}
+	if n, ok, err := int64Property(obj, "size", "Size"); err != nil {
+		return params, err
+	} else if ok {
+		params.Size = n
+	}
+	if s, ok, err := stringProperty(obj, "sortBy", "SortBy", "sort_by"); err != nil {
+		return params, err
+	} else if ok {
+		params.SortBy = s
+	}
+	if b, ok, err := boolProperty(obj, "desc", "sortDescending", "SortDescending", "sort_descending"); err != nil {
+		return params, err
+	} else if ok {
+		params.SortDescending = b
+	}
+
+	return params, nil
+}
+
+func normalizeListParams(params model.ListParams) model.ListParams {
+	if params.Size == 0 {
+		params.Size = 25
+	}
+	if params.Page == 0 {
+		params.Page = 1
+	}
+	return params
+}
+
+func int64Property(obj *goja.Object, names ...string) (int64, bool, error) {
+	for _, name := range names {
+		v := obj.Get(name)
+		if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
+			continue
+		}
+
+		switch n := v.Export().(type) {
+		case int:
+			return int64(n), true, nil
+		case int8:
+			return int64(n), true, nil
+		case int16:
+			return int64(n), true, nil
+		case int32:
+			return int64(n), true, nil
+		case int64:
+			return n, true, nil
+		case uint:
+			return int64(n), true, nil
+		case uint8:
+			return int64(n), true, nil
+		case uint16:
+			return int64(n), true, nil
+		case uint32:
+			return int64(n), true, nil
+		case uint64:
+			return int64(n), true, nil
+		case float32:
+			return int64(n), true, nil
+		case float64:
+			return int64(n), true, nil
+		default:
+			return 0, true, fmt.Errorf("%s should be a number", name)
+		}
+	}
+	return 0, false, nil
+}
+
+func stringProperty(obj *goja.Object, names ...string) (string, bool, error) {
+	for _, name := range names {
+		v := obj.Get(name)
+		if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
+			continue
+		}
+
+		s, ok := v.Export().(string)
+		if !ok {
+			return "", true, fmt.Errorf("%s should be a string", name)
+		}
+		return s, true, nil
+	}
+	return "", false, nil
+}
+
+func boolProperty(obj *goja.Object, names ...string) (bool, bool, error) {
+	for _, name := range names {
+		v := obj.Get(name)
+		if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
+			continue
+		}
+
+		b, ok := v.Export().(bool)
+		if !ok {
+			return false, true, fmt.Errorf("%s should be a boolean", name)
+		}
+		return b, true, nil
+	}
+	return false, false, nil
+}
+
 func (env *ExecutionEnvironment) addHelpers(vm *goja.Runtime) error {
 	err := vm.Set("log", func(call goja.FunctionCall) goja.Value {
 		if len(call.Arguments) == 0 {
@@ -378,11 +487,14 @@ func (env *ExecutionEnvironment) addDatabaseFunctions(vm *goja.Runtime) error {
 		if len(call.Arguments) >= 2 {
 			v := call.Argument(1)
 			if !goja.IsNull(v) && !goja.IsUndefined(v) {
-				if err := vm.ExportTo(v, &params); err != nil {
+				var err error
+				params, err = listParamsFromValue(vm, v)
+				if err != nil {
 					return vm.ToValue(Result{Content: "the second argument should be an object"})
 				}
 			}
 		}
+		params = normalizeListParams(params)
 
 		result, err := env.DataStore.ListDocuments(env.Auth, env.BaseName, col, params)
 		if err != nil {
@@ -480,17 +592,15 @@ func (env *ExecutionEnvironment) addDatabaseFunctions(vm *goja.Runtime) error {
 		if len(call.Arguments) >= 3 {
 			v := call.Argument(2)
 			if !goja.IsNull(v) && !goja.IsUndefined(v) {
-				if err := vm.ExportTo(v, &params); err != nil {
+				var err error
+				params, err = listParamsFromValue(vm, v)
+				if err != nil {
 					return vm.ToValue(Result{Content: "the second argument should be an object"})
 				}
 			}
 		}
 
-		// apply default page and limit
-		if params.Size == 0 {
-			params.Size = 25
-			params.Page = 1
-		}
+		params = normalizeListParams(params)
 
 		result, err := env.DataStore.QueryDocuments(env.Auth, env.BaseName, col, filter, params)
 		if err != nil {

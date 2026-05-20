@@ -168,6 +168,50 @@ func TestRuntimeBulkDatabaseHelpers(t *testing.T) {
 	assertFunctionCompleted(t, ctx.datastore, ctx.fn.ID)
 }
 
+func TestRuntimeListParamsFromJS(t *testing.T) {
+	code := `
+	function fail(message) {
+		throw new Error(message);
+	}
+
+	function expectOK(result, name) {
+		if (!result.ok) {
+			fail(name + " failed: " + result.content);
+		}
+		return result.content;
+	}
+
+	function handle(body) {
+		expectOK(createBulk("runtime_paged_contacts", [
+			{ email: "a@example.com", segment: "lead", score: 1 },
+			{ email: "b@example.com", segment: "lead", score: 2 },
+			{ email: "c@example.com", segment: "lead", score: 3 }
+		]), "createBulk");
+
+		var listed = expectOK(list("runtime_paged_contacts", { page: 2, size: 1, sortBy: "score", desc: true }), "list page 2");
+		if (listed.page !== 2 || listed.size !== 1 || listed.results.length !== 1 || listed.results[0].score !== 2) {
+			fail("unexpected list page result: " + JSON.stringify(listed));
+		}
+
+		var queried = expectOK(query("runtime_paged_contacts", [["segment", "=", "lead"]], { Page: 3, Size: 1, SortBy: "score" }), "query page 3");
+		if (queried.page !== 3 || queried.size !== 1 || queried.results.length !== 1) {
+			fail("unexpected query page result: " + JSON.stringify(queried));
+		}
+
+		var defaulted = expectOK(query("runtime_paged_contacts", [["segment", "=", "lead"]], { Size: 2, SortBy: "score" }), "query default page");
+		if (defaulted.page !== 1 || defaulted.size !== 2 || defaulted.results.length !== 2) {
+			fail("unexpected query default result: " + JSON.stringify(defaulted));
+		}
+	}`
+
+	ctx := newRuntimeTestContext(t, "runtime-list-params", code)
+	if err := ctx.env.Execute(map[string]any{}); err != nil {
+		t.Fatal(err)
+	}
+
+	assertFunctionCompleted(t, ctx.datastore, ctx.fn.ID)
+}
+
 func TestRuntimeCommandArgumentsFromDecodedWrapper(t *testing.T) {
 	code := `
 	function fail(message) {
