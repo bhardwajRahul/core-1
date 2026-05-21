@@ -112,6 +112,30 @@ func TestListDocuments(t *testing.T) {
 	}
 }
 
+func TestListDocumentsSortsByCreatedAscendingByDefault(t *testing.T) {
+	col := "list_order_tasks"
+	createOrderedTasks(t, col, "first", "second", "third")
+
+	result, err := datastore.ListDocuments(adminAuth, confDBName, col, model.ListParams{Page: 1, Size: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertResultTitles(t, result.Results, []string{"first", "second", "third"})
+}
+
+func TestListDocumentsSortsByCreatedDescending(t *testing.T) {
+	col := "list_order_desc_tasks"
+	createOrderedTasks(t, col, "first", "second", "third")
+
+	result, err := datastore.ListDocuments(adminAuth, confDBName, col, model.ListParams{Page: 1, Size: 10, SortDescending: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertResultTitles(t, result.Results, []string{"third", "second", "first"})
+}
+
 func TestQueryDocuments(t *testing.T) {
 	task1 := newTask("where1", false)
 	task2 := newTask("where2", true)
@@ -145,6 +169,70 @@ func TestQueryDocuments(t *testing.T) {
 	r1 := dec(result.Results[0])
 	if r1.Title != "where1" || r1.Done {
 		t.Errorf("expected r1 to have where1 and false as value: %v", r1)
+	}
+}
+
+func TestQueryDocumentsSortsByCreatedAscendingByDefault(t *testing.T) {
+	col := "query_order_tasks"
+	createOrderedTasks(t, col, "first", "second", "third")
+
+	filters, err := datastore.ParseQuery([][]interface{}{
+		{"done", "=", false},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := datastore.QueryDocuments(adminAuth, confDBName, col, filters, model.ListParams{Page: 1, Size: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertResultTitles(t, result.Results, []string{"first", "second", "third"})
+}
+
+func TestQueryDocumentsSortsByCreatedDescending(t *testing.T) {
+	col := "query_order_desc_tasks"
+	createOrderedTasks(t, col, "first", "second", "third")
+
+	filters, err := datastore.ParseQuery([][]interface{}{
+		{"done", "=", false},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := datastore.QueryDocuments(adminAuth, confDBName, col, filters, model.ListParams{Page: 1, Size: 10, SortDescending: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertResultTitles(t, result.Results, []string{"third", "second", "first"})
+}
+
+func createOrderedTasks(t *testing.T, col string, titles ...string) {
+	t.Helper()
+
+	for _, title := range titles {
+		if _, err := datastore.CreateDocument(adminAuth, confDBName, col, newTask(title, false)); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func assertResultTitles(t *testing.T, results []map[string]interface{}, expected []string) {
+	t.Helper()
+
+	if len(results) != len(expected) {
+		t.Fatalf("expected %d results got %d", len(expected), len(results))
+	}
+
+	for i, want := range expected {
+		got := dec(results[i])
+		if got.Title != want {
+			t.Fatalf("expected result %d title %q got %q", i, want, got.Title)
+		}
 	}
 }
 

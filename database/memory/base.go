@@ -58,12 +58,7 @@ func (m *Memory) ListDocuments(auth model.Auth, dbName, col string, params model
 	}
 
 	list = secureRead(auth, col, list)
-
-	if params.SortDescending {
-		list = sortSlice(list, func(a, b map[string]any) bool {
-			return fmt.Sprintf("%v", a[FieldCreated]) > fmt.Sprintf("%v", b[FieldCreated])
-		})
-	}
+	sortDocuments(list, params)
 
 	start := (params.Page - 1) * params.Size
 	end := start + params.Size
@@ -92,6 +87,7 @@ func (m *Memory) QueryDocuments(auth model.Auth, dbName, col string, filter map[
 	list = secureRead(auth, col, list)
 
 	filtered := filterByClauses(list, filter)
+	sortDocuments(filtered, params)
 
 	start := (params.Page - 1) * params.Size
 	end := start + params.Size
@@ -106,6 +102,105 @@ func (m *Memory) QueryDocuments(auth model.Auth, dbName, col string, filter map[
 	result.Results = filtered[start:end]
 
 	return
+}
+
+func sortDocuments(list []map[string]any, params model.ListParams) {
+	sortBy := params.SortBy
+	if len(sortBy) == 0 || strings.EqualFold(sortBy, "created") {
+		sortBy = FieldCreated
+	}
+
+	sortSlice(list, func(a, b map[string]any) bool {
+		cmp := compareValues(a[sortBy], b[sortBy])
+		if cmp == 0 && sortBy != FieldID {
+			cmp = compareValues(a[FieldID], b[FieldID])
+		}
+
+		if params.SortDescending {
+			return cmp > 0
+		}
+		return cmp < 0
+	})
+}
+
+func compareValues(a, b any) int {
+	if a == nil && b == nil {
+		return 0
+	}
+	if a == nil {
+		return -1
+	}
+	if b == nil {
+		return 1
+	}
+
+	if ta, ok := a.(time.Time); ok {
+		if tb, ok := b.(time.Time); ok {
+			switch {
+			case ta.Before(tb):
+				return -1
+			case ta.After(tb):
+				return 1
+			default:
+				return 0
+			}
+		}
+	}
+
+	if fa, ok := asFloat64(a); ok {
+		if fb, ok := asFloat64(b); ok {
+			switch {
+			case fa < fb:
+				return -1
+			case fa > fb:
+				return 1
+			default:
+				return 0
+			}
+		}
+	}
+
+	sa := fmt.Sprintf("%v", a)
+	sb := fmt.Sprintf("%v", b)
+	switch {
+	case sa < sb:
+		return -1
+	case sa > sb:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func asFloat64(v any) (float64, bool) {
+	switch n := v.(type) {
+	case int:
+		return float64(n), true
+	case int8:
+		return float64(n), true
+	case int16:
+		return float64(n), true
+	case int32:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case uint:
+		return float64(n), true
+	case uint8:
+		return float64(n), true
+	case uint16:
+		return float64(n), true
+	case uint32:
+		return float64(n), true
+	case uint64:
+		return float64(n), true
+	case float32:
+		return float64(n), true
+	case float64:
+		return n, true
+	default:
+		return 0, false
+	}
 }
 
 func (m *Memory) GetDocumentByID(auth model.Auth, dbName, col, id string) (doc map[string]interface{}, err error) {
