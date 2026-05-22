@@ -16,7 +16,7 @@ import (
 	"github.com/staticbackendhq/core/model"
 	"github.com/staticbackendhq/core/search"
 
-	"github.com/go-co-op/gocron"
+	"github.com/go-co-op/gocron/v2"
 )
 
 type TaskScheduler struct {
@@ -26,7 +26,7 @@ type TaskScheduler struct {
 	Email     email.Mailer
 	Log       *logger.Logger
 
-	Scheduler *gocron.Scheduler
+	Scheduler gocron.Scheduler
 }
 
 type taskAuthCache struct {
@@ -54,20 +54,34 @@ func (ts *TaskScheduler) Start() {
 		return
 	}
 	ts.ensureScheduler()
-
-	for _, task := range tasks {
-		_, err := ts.Scheduler.Cron(task.Interval).Tag(task.ID).Do(ts.run, task)
-		if err != nil {
-			ts.Log.Error().Err(err).Msgf("error scheduling this task: %s", task.ID)
-		}
+	if ts.Scheduler == nil {
+		return
 	}
 
-	ts.Scheduler.StartBlocking()
+	for _, task := range tasks {
+		ts.addTask(task)
+	}
+
+	ts.Scheduler.Start()
+	select {}
 }
 
 func (ts *TaskScheduler) AddOnTheFly(task model.Task) {
 	ts.ensureScheduler()
-	_, err := ts.Scheduler.Cron(task.Interval).Tag(task.ID).Do(ts.run, task)
+	ts.addTask(task)
+}
+
+func (ts *TaskScheduler) addTask(task model.Task) {
+	if ts.Scheduler == nil {
+		ts.Log.Error().Msgf("scheduler is not initialized; cannot schedule task: %s", task.ID)
+		return
+	}
+
+	_, err := ts.Scheduler.NewJob(
+		gocron.CronJob(task.Interval, false),
+		gocron.NewTask(ts.run, task),
+		gocron.WithTags(task.ID),
+	)
 	if err != nil {
 		ts.Log.Error().Err(err).Msgf("error scheduling this task: %s", task.ID)
 	}
@@ -75,15 +89,26 @@ func (ts *TaskScheduler) AddOnTheFly(task model.Task) {
 
 func (ts *TaskScheduler) CancelTask(id string) error {
 	ts.ensureScheduler()
-	return ts.Scheduler.RemoveByTag(id)
+	if ts.Scheduler == nil {
+		return fmt.Errorf("scheduler is not initialized")
+	}
+
+	ts.Scheduler.RemoveByTags(id)
+	return nil
 }
 
 func (ts *TaskScheduler) ensureScheduler() {
 	if ts.Scheduler != nil {
 		return
 	}
-	ts.Scheduler = gocron.NewScheduler(time.UTC)
-	ts.Scheduler.TagsUnique()
+
+	scheduler, err := gocron.NewScheduler(gocron.WithLocation(time.UTC))
+	if err != nil {
+		ts.Log.Error().Err(err).Msg("error creating task scheduler")
+		return
+	}
+
+	ts.Scheduler = scheduler
 }
 
 func (ts *TaskScheduler) run(task model.Task) {

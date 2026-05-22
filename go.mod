@@ -10,7 +10,7 @@ require (
 	github.com/chromedp/chromedp v0.7.6
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
 	github.com/gbrlsnchs/jwt/v3 v3.0.0-rc.1
-	github.com/go-co-op/gocron v1.6.2
+	github.com/go-co-op/gocron/v2 v2.21.2
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.4
 	github.com/markbates/goth v1.73.0
@@ -73,6 +73,7 @@ require (
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/pprof v0.0.0-20250317173921-a4b03ec1a45e // indirect
+	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v0.0.0-20171115153421-f7279a603ede // indirect
 	github.com/klauspost/compress v1.17.6 // indirect

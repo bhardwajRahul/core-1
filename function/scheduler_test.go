@@ -186,15 +186,71 @@ func TestTaskSchedulerAddAndCancelOnTheFly(t *testing.T) {
 	if ts.Scheduler == nil {
 		t.Fatal("expected AddOnTheFly to initialize scheduler")
 	}
-	if got := ts.Scheduler.Len(); got != 1 {
+	if got := len(ts.Scheduler.Jobs()); got != 1 {
 		t.Fatalf("expected one scheduled job, got %d", got)
 	}
 
 	if err := ts.CancelTask(task.ID); err != nil {
 		t.Fatal(err)
 	}
-	if got := ts.Scheduler.Len(); got != 0 {
+	if got := len(ts.Scheduler.Jobs()); got != 0 {
 		t.Fatalf("expected no scheduled jobs after cancel, got %d", got)
+	}
+}
+
+func TestTaskSchedulerDoesNotRunCronTaskOnStart(t *testing.T) {
+	baseName := fmt.Sprintf("sched_no_start_%d", time.Now().UnixNano())
+	ds, _ := newSchedulerTestStore(t, baseName)
+
+	fn := model.ExecData{
+		FunctionName: "not-on-start",
+		TriggerTopic: "schedule",
+		Code: `function handle(channel, type, data) {
+			var result = create("unexpected_start_runs", { ok: true });
+			if (!result.ok) {
+				throw new Error(result.content);
+			}
+		}`,
+		Version: 1,
+	}
+	if _, err := ds.AddFunction(baseName, fn); err != nil {
+		t.Fatal(err)
+	}
+
+	task := model.Task{
+		Name:     "not-on-start-task",
+		Type:     model.TaskTypeFunction,
+		Value:    fn.FunctionName,
+		Interval: "0 2 * * *",
+		BaseName: baseName,
+	}
+	taskID, err := ds.AddTask(baseName, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task.ID = taskID
+
+	ts := &TaskScheduler{
+		Volatile:  cache.NewDevCache(logger.Get(config.LoadConfig())),
+		DataStore: ds,
+		Log:       logger.Get(config.LoadConfig()),
+	}
+	ts.AddOnTheFly(task)
+	ts.Scheduler.Start()
+	defer func() {
+		if err := ts.Scheduler.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	storedTask, err := ds.GetTask(baseName, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !storedTask.LastRun.IsZero() {
+		t.Fatalf("expected cron task not to run on scheduler start, got last run %s", storedTask.LastRun)
 	}
 }
 
