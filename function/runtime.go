@@ -149,7 +149,13 @@ func (env *ExecutionEnvironment) prepareArguments(vm *goja.Runtime, data interfa
 func (env *ExecutionEnvironment) prepareCommandArguments(vm *goja.Runtime, msg model.Command) ([]goja.Value, error) {
 	args := make([]goja.Value, 0, 3)
 	var v any
-	if err := json.Unmarshal([]byte(msg.Data), &v); err != nil {
+
+	data := msg.Data
+	if strings.TrimSpace(data) == "" {
+		data = "{}"
+	}
+
+	if err := json.Unmarshal([]byte(data), &v); err != nil {
 		return args, err
 	}
 

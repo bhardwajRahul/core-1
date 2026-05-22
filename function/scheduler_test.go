@@ -103,6 +103,75 @@ func TestTaskSchedulerUsesRootAuthForFunctionTask(t *testing.T) {
 	}
 }
 
+func TestTaskSchedulerFunctionTaskWithoutMetaUsesEmptyData(t *testing.T) {
+	baseName := fmt.Sprintf("sched_empty_meta_%d", time.Now().UnixNano())
+	ds, rootAuth := newSchedulerTestStore(t, baseName)
+	vol := cache.NewDevCache(logger.Get(config.LoadConfig()))
+
+	fn := model.ExecData{
+		FunctionName: "empty-meta",
+		TriggerTopic: "schedule",
+		Code: `function handle(channel, type, data) {
+			if (channel !== "empty-meta-task") {
+				throw new Error("unexpected channel: " + channel);
+			}
+			if (type !== "fn_call") {
+				throw new Error("unexpected type: " + type);
+			}
+			if (!data || Object.keys(data).length !== 0) {
+				throw new Error("expected empty data object");
+			}
+
+			var result = create("scheduled_empty_meta_runs", { ok: true });
+			if (!result.ok) {
+				throw new Error(result.content);
+			}
+		}`,
+		Version: 1,
+	}
+	if _, err := ds.AddFunction(baseName, fn); err != nil {
+		t.Fatal(err)
+	}
+
+	task := model.Task{
+		Name:     "empty-meta-task",
+		Type:     model.TaskTypeFunction,
+		Value:    fn.FunctionName,
+		Interval: "0 1 * * *",
+		BaseName: baseName,
+	}
+	taskID, err := ds.AddTask(baseName, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task.ID = taskID
+
+	ts := &TaskScheduler{
+		Volatile:  vol,
+		DataStore: ds,
+		Log:       logger.Get(config.LoadConfig()),
+	}
+	ts.run(task)
+
+	waitForFunctionHistory(t, ds, baseName, fn.FunctionName)
+
+	storedTask, err := ds.GetTask(baseName, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if storedTask.LastRun.IsZero() {
+		t.Fatal("expected scheduled task last run to be recorded")
+	}
+
+	result, err := ds.ListDocuments(rootAuth, baseName, "scheduled_empty_meta_runs", model.ListParams{Page: 1, Size: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Total != 1 {
+		t.Fatalf("expected one scheduled empty meta run document, got %d", result.Total)
+	}
+}
+
 func TestTaskSchedulerAddAndCancelOnTheFly(t *testing.T) {
 	ts := &TaskScheduler{Log: logger.Get(config.LoadConfig())}
 	task := model.Task{

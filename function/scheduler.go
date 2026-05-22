@@ -88,6 +88,7 @@ func (ts *TaskScheduler) ensureScheduler() {
 
 func (ts *TaskScheduler) run(task model.Task) {
 	ts.Log.Info().Msgf("executing job:%s typed:%s value:%s", task.Name, task.Type, task.Value)
+	ts.markTaskRan(task)
 
 	// the task must run as the root base user
 	var auth model.Auth
@@ -129,6 +130,19 @@ func (ts *TaskScheduler) run(task model.Task) {
 		ts.sendMessage(auth, task)
 	case model.TaskTypeHTTP:
 		ts.httpRequest(auth, task)
+	}
+}
+
+func (ts *TaskScheduler) markTaskRan(task model.Task) {
+	stored, err := ts.DataStore.GetTask(task.BaseName, task.ID)
+	if err != nil {
+		ts.Log.Error().Err(err).Msgf("error loading task before updating last run: %s", task.ID)
+		return
+	}
+
+	stored.LastRun = time.Now().UTC()
+	if err := ts.DataStore.UpdateTask(task.BaseName, stored); err != nil {
+		ts.Log.Error().Err(err).Msgf("error updating last run for task: %s", task.ID)
 	}
 }
 
