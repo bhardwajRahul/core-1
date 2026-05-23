@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/staticbackendhq/core/backend"
 	"github.com/staticbackendhq/core/middleware"
@@ -158,6 +159,86 @@ func TestGetAuthTokenByUserID(t *testing.T) {
 	}
 	if len(token) == 0 {
 		t.Fatal("expected token to be returned")
+	}
+}
+
+func TestGetAuthTokenByUserIDForAccountAssociation(t *testing.T) {
+	conf, err := backend.DB.FindDatabase(pubKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	homeAccountID, err := backend.DB.CreateAccount(dbName, "sudo-associated-home@test.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	userID, err := backend.DB.CreateUser(dbName, model.User{
+		AccountID: homeAccountID,
+		Email:     "sudo-associated-user@test.com",
+		Password:  "unused",
+		Token:     backend.DB.NewID(),
+		Role:      0,
+		Created:   time.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assoc := model.AccountUser{
+		UserID:    userID,
+		AccountID: testAccountID,
+		Email:     "sudo-associated-user@test.com",
+		Role:      25,
+		Token:     backend.DB.NewID(),
+		Created:   time.Now(),
+	}
+	if _, err := backend.DB.AddAccountUser(dbName, assoc); err != nil {
+		t.Fatal(err)
+	}
+
+	resp := dbReq(t, mship.getAuthTokenByUserID, "GET", "/sudogetauthtokenbyuserid/"+testAccountID+"/"+userID, nil, true)
+	defer resp.Body.Close()
+
+	if resp.StatusCode > 299 {
+		t.Fatal(GetResponseBody(t, resp))
+	}
+
+	var token string
+	if err := parseBody(resp.Body, &token); err != nil {
+		t.Fatal(err)
+	}
+	if len(token) == 0 {
+		t.Fatal("expected token to be returned")
+	}
+
+	resp = authReqWithToken(t, token, mship.me, "GET", "/me", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode > 299 {
+		t.Fatal(GetResponseBody(t, resp))
+	}
+
+	var auth model.Auth
+	if err := parseBody(resp.Body, &auth); err != nil {
+		t.Fatal(err)
+	}
+	if auth.UserID != userID {
+		t.Fatalf("expected user id %s got %s", userID, auth.UserID)
+	}
+	if auth.AccountID != testAccountID {
+		t.Fatalf("expected associated account id %s got %s", testAccountID, auth.AccountID)
+	}
+	if auth.Role != assoc.Role {
+		t.Fatalf("expected role %d got %d", assoc.Role, auth.Role)
+	}
+
+	mship := backend.Membership(conf)
+	homeUser, err := mship.GetUserByID(homeAccountID, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if homeUser.AccountID != homeAccountID {
+		t.Fatalf("expected home account id %s got %s", homeAccountID, homeUser.AccountID)
 	}
 }
 

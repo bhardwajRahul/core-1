@@ -261,9 +261,25 @@ func (m *membership) getAuthTokenByUserID(w http.ResponseWriter, r *http.Request
 
 	mship := backend.Membership(conf)
 	user, err := mship.GetUserByID(accountID, userID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
+	if err != nil || user.AccountID != accountID {
+		assoc, assocErr := backend.DB.GetAccountUser(conf.Name, userID, accountID)
+		if assocErr != nil {
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
+			http.Error(w, "user not found for account", http.StatusNotFound)
+			return
+		}
+
+		user = model.User{
+			ID:        assoc.UserID,
+			AccountID: assoc.AccountID,
+			Email:     assoc.Email,
+			Role:      assoc.Role,
+			Token:     assoc.Token,
+			Created:   assoc.Created,
+		}
 	}
 
 	jwtBytes, err := mship.GetAuthToken(user)
