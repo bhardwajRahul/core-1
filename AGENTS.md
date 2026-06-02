@@ -39,14 +39,14 @@ interfaces and provider patterns before adding abstractions.
 ## Testing Guidelines
 
 Tests use Go's standard `testing` package. Add or update tests for behavior
-changes, especially shared API paths and database/cache providers. The default
-`.env` is intentionally local-only (`DATABASE_URL=mem`, `DATA_STORE=memory`,
-`REDIS_HOST=mem`, local storage) so agents and contributors can run bug-fix
-checks without external services. Run the narrowest relevant target first, such
-as `make test-search`, `make test-sqlite`, or a focused `go test ./function`;
-then run `make test-local` for broader local coverage. Use `make alltest` only
-when provider services are available, or `make test-ci-local-clean` to start the
-Docker-backed PostgreSQL, MongoDB, Redis, and Mailpit stack.
+changes, especially shared API paths and database/cache providers. Prefer the
+Makefile targets over raw `go test` commands; start with the narrowest relevant
+`make` target, then run `make test-local` for broader local coverage. The
+`make test-local` target uses the local memory/SQLite setup and avoids external
+PostgreSQL, MongoDB, Redis, and S3 services, so it is the default broad check
+for agent changes. Use `make alltest` only when provider services are available,
+or `make test-ci-local-clean` to start the Docker-backed PostgreSQL, MongoDB,
+Redis, and Mailpit stack.
 
 ## Commit & Pull Request Guidelines
 

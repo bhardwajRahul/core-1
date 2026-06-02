@@ -6,12 +6,15 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/url"
 	"time"
 
 	"github.com/staticbackendhq/core/config"
 )
+
+var ErrInvalidFunctionSecretKey = errors.New("APP_SECRET must be set to a 16, 24, or 32 byte value before using function secrets")
 
 // ExecData represents a server-side function with its name, code and execution
 // history
@@ -50,7 +53,7 @@ func EncryptFunctionSecrets(raw string) ([]byte, error) {
 		return nil, err
 	}
 
-	c, err := aes.NewCipher([]byte(config.Current.AppSecret))
+	c, err := newFunctionSecretsCipher()
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +92,7 @@ func (ex ExecData) GetSecrets() (map[string]string, error) {
 		return make(map[string]string), nil
 	}
 
-	c, err := aes.NewCipher([]byte(config.Current.AppSecret))
+	c, err := newFunctionSecretsCipher()
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +118,17 @@ func (ex ExecData) GetSecrets() (map[string]string, error) {
 		return nil, err
 	}
 	return secrets, nil
+}
+
+func newFunctionSecretsCipher() (cipher.Block, error) {
+	key := []byte(config.Current.AppSecret)
+	switch len(key) {
+	case 16, 24, 32:
+	default:
+		return nil, fmt.Errorf("%w; got %d bytes", ErrInvalidFunctionSecretKey, len(key))
+	}
+
+	return aes.NewCipher(key)
 }
 
 // ExecHistory represents a function run ending result

@@ -1,7 +1,9 @@
 package model
 
 import (
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/staticbackendhq/core/config"
@@ -57,5 +59,43 @@ func TestFunctionSecretsInvalidCiphertext(t *testing.T) {
 
 	if _, err := (ExecData{Secrets: []byte("bad")}).GetSecrets(); err == nil {
 		t.Fatal("expected invalid ciphertext error")
+	}
+}
+
+func TestFunctionSecretsRequireValidAppSecret(t *testing.T) {
+	tests := []struct {
+		name      string
+		appSecret string
+		wantBytes string
+	}{
+		{
+			name:      "missing",
+			appSecret: "",
+			wantBytes: "got 0 bytes",
+		},
+		{
+			name:      "invalid length",
+			appSecret: "too-short",
+			wantBytes: "got 9 bytes",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config.Current.AppSecret = tt.appSecret
+
+			_, err := EncryptFunctionSecrets("apiKey=first")
+			if !errors.Is(err, ErrInvalidFunctionSecretKey) {
+				t.Fatalf("expected invalid APP_SECRET error got %v", err)
+			}
+			if !strings.Contains(err.Error(), tt.wantBytes) {
+				t.Fatalf("expected key length in error got %v", err)
+			}
+
+			_, err = (ExecData{Secrets: []byte("encrypted")}).GetSecrets()
+			if !errors.Is(err, ErrInvalidFunctionSecretKey) {
+				t.Fatalf("expected invalid APP_SECRET error got %v", err)
+			}
+		})
 	}
 }

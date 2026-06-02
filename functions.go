@@ -1,6 +1,7 @@
 package staticbackend
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/staticbackendhq/core/backend"
@@ -38,6 +39,10 @@ func (f *functions) add(w http.ResponseWriter, r *http.Request) {
 
 	secrets, err := model.EncryptFunctionSecrets(data.Secrets)
 	if err != nil {
+		if errors.Is(err, model.ErrInvalidFunctionSecretKey) {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -91,6 +96,10 @@ func (f *functions) update(w http.ResponseWriter, r *http.Request) {
 	if data.Secrets != nil {
 		secrets, err := model.EncryptFunctionSecrets(*data.Secrets)
 		if err != nil {
+			if errors.Is(err, model.ErrInvalidFunctionSecretKey) {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}

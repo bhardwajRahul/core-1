@@ -22,6 +22,10 @@
       "description": "Token use to encrypt the session tokens.",
       "generator": "secret"
     },
+		"APP_SECRET": {
+      "description": "Secret used to encrypt stored backend secrets. Must be exactly 16, 24, or 32 bytes.",
+      "generator": "secret"
+    },
 		"MAIL_PROVIDER": {
       "description": "Determines which email provider to use (dev | ses)",
       "value": "dev"

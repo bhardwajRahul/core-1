@@ -16,6 +16,8 @@ services:
         value: pg
       - key: JWT_SECRET
         generateValue: true
+      - key: APP_SECRET
+        sync: false
       - key: MAIL_PROVIDER
         value: dev
       - key: STORAGE_PROVIDER
