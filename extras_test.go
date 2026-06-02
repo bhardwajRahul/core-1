@@ -119,7 +119,7 @@ func TestHtmlToPDF(t *testing.T) {
 
 	data := ConvertParams{
 		ToPDF: true,
-		URL:   "https://staticbackend.dev",
+		URL:   htmlToXTestURL(t),
 	}
 
 	resp := dbReq(t, extexec.htmlToX, "POST", "/extras/htmltox", data)
@@ -144,7 +144,7 @@ func TestHtmlToPNG(t *testing.T) {
 
 	data := ConvertParams{
 		ToPDF:    false,
-		URL:      "https://staticbackend.dev",
+		URL:      htmlToXTestURL(t),
 		FullPage: true,
 	}
 
@@ -160,4 +160,25 @@ func TestHtmlToPNG(t *testing.T) {
 		t.Log(string(b))
 		t.Errorf("expected status 200 got %s", resp.Status)
 	}
+}
+
+func htmlToXTestURL(t *testing.T) string {
+	t.Helper()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, `<!doctype html>
+<html>
+<head><title>StaticBackend HTML conversion test</title></head>
+<body>
+<main>
+<h1>StaticBackend HTML conversion test</h1>
+<p>This local page keeps PDF and PNG conversion tests independent from external network availability.</p>
+</main>
+</body>
+</html>`)
+	}))
+	t.Cleanup(srv.Close)
+
+	return srv.URL
 }
