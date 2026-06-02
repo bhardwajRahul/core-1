@@ -32,6 +32,9 @@ func fakePubDocEvent(auth model.Auth, dbName, channel, typ string, v interface{}
 
 func TestMain(m *testing.M) {
 	config.Current = config.LoadConfig()
+	if config.Current.AppSecret == "" {
+		config.Current.AppSecret = "12345678901234567890123456789012"
+	}
 
 	db := make(map[string]map[string][]byte)
 	if err := initDB(db); err != nil {

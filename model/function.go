@@ -1,7 +1,16 @@
 package model
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/url"
 	"time"
+
+	"github.com/staticbackendhq/core/config"
 )
 
 // ExecData represents a server-side function with its name, code and execution
@@ -12,10 +21,100 @@ type ExecData struct {
 	FunctionName string        `json:"name"`
 	TriggerTopic string        `json:"trigger"`
 	Code         string        `json:"code"`
+	Secrets      []byte        `json:"-"`
 	Version      int           `json:"version"`
 	LastUpdated  time.Time     `json:"lastUpdated"`
 	LastRun      time.Time     `json:"lastRun"`
 	History      []ExecHistory `json:"history"`
+}
+
+type FunctionUpdate struct {
+	ID            string
+	Code          string
+	TriggerTopic  string
+	Secrets       []byte
+	UpdateSecrets bool
+}
+
+func EncryptFunctionSecrets(raw string) ([]byte, error) {
+	secrets, err := ParseFunctionSecrets(raw)
+	if err != nil {
+		return nil, err
+	}
+	if len(secrets) == 0 {
+		return nil, nil
+	}
+
+	b, err := json.Marshal(secrets)
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := aes.NewCipher([]byte(config.Current.AppSecret))
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		return nil, err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+
+	return gcm.Seal(nonce, nonce, b, nil), nil
+}
+
+func ParseFunctionSecrets(raw string) (map[string]string, error) {
+	values, err := url.ParseQuery(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	secrets := make(map[string]string, len(values))
+	for key := range values {
+		if key == "" {
+			continue
+		}
+		secrets[key] = values.Get(key)
+	}
+	return secrets, nil
+}
+
+func (ex ExecData) GetSecrets() (map[string]string, error) {
+	if len(ex.Secrets) == 0 {
+		return make(map[string]string), nil
+	}
+
+	c, err := aes.NewCipher([]byte(config.Current.AppSecret))
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		return nil, err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(ex.Secrets) < nonceSize {
+		return nil, errors.New("ciphertext too short")
+	}
+
+	nonce, ciphertext := ex.Secrets[:nonceSize], ex.Secrets[nonceSize:]
+	b, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	secrets := make(map[string]string)
+	if err := json.Unmarshal(b, &secrets); err != nil {
+		return nil, err
+	}
+	return secrets, nil
 }
 
 // ExecHistory represents a function run ending result

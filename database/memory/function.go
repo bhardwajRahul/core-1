@@ -18,17 +18,20 @@ func (m *Memory) AddFunction(dbName string, data model.ExecData) (id string, err
 	return
 }
 
-func (m *Memory) UpdateFunction(dbName, id, code, trigger string) error {
+func (m *Memory) UpdateFunction(dbName string, update model.FunctionUpdate) error {
 	var data model.ExecData
-	if err := getByID(m, dbName, "sb_functions", id, &data); err != nil {
+	if err := getByID(m, dbName, "sb_functions", update.ID, &data); err != nil {
 		return err
 	}
 
-	data.TriggerTopic = trigger
-	data.Code = code
+	data.TriggerTopic = update.TriggerTopic
+	data.Code = update.Code
+	if update.UpdateSecrets {
+		data.Secrets = update.Secrets
+	}
 	data.Version += 1
 
-	return create(m, dbName, "sb_functions", id, data)
+	return create(m, dbName, "sb_functions", update.ID, data)
 }
 
 func (m *Memory) GetFunctionForExecution(dbName, name string) (data model.ExecData, err error) {

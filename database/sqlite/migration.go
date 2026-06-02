@@ -103,6 +103,11 @@ func ensureVersion(db *sql.DB) error {
 				return err
 			}
 		}
+		if i == 4 {
+			if err := migrateAddFunctionSecrets(db); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -140,6 +145,40 @@ func migrateAddAccountUsers(db *sql.DB) error {
 			);
 		`, "{schema}", name, -1)
 		if _, err := db.Exec(ddl); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migrateAddFunctionSecrets(db *sql.DB) error {
+	rows, err := db.Query(`SELECT name FROM sb_apps`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, name := range names {
+		ddl := strings.Replace(`
+			ALTER TABLE {schema}_sb_functions
+			ADD COLUMN function_secrets BLOB;
+		`, "{schema}", name, -1)
+		if _, err := db.Exec(ddl); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				continue
+			}
 			return err
 		}
 	}

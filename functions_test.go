@@ -335,6 +335,125 @@ func TestFunctionSudoExecUsesRootAuth(t *testing.T) {
 	}
 }
 
+func TestFunctionSecretsCreateUpdateAndExecute(t *testing.T) {
+	code := `
+	function handle() {
+		if (secrets.apiKey !== "first value") {
+			log("ERROR: expected first secret value");
+			return;
+		}
+		if (secrets["dash-key"] !== "dash value") {
+			log("ERROR: expected dash key secret value");
+			return;
+		}
+	}
+	`
+
+	data := map[string]interface{}{
+		"name":    "fn-test-secrets",
+		"code":    code,
+		"trigger": "web",
+		"secrets": "apiKey=first+value&dash-key=dash+value",
+	}
+	addResp := dbReq(t, funexec.add, "POST", "/", data, true)
+	defer addResp.Body.Close()
+	if addResp.StatusCode != http.StatusOK {
+		t.Fatal(GetResponseBody(t, addResp))
+	}
+
+	execResp := dbReq(t, funexec.exec, "POST", "/fn/exec/fn-test-secrets", map[string]interface{}{}, false)
+	defer execResp.Body.Close()
+	if execResp.StatusCode != http.StatusOK {
+		t.Fatal(GetResponseBody(t, execResp))
+	}
+
+	time.Sleep(250 * time.Millisecond)
+
+	fn, err := backend.DB.GetFunctionByName(dbName, "fn-test-secrets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFunctionHistoryHasNoError(t, fn)
+
+	infoResp := dbReq(t, funexec.info, "GET", "/fn/info/fn-test-secrets", nil, true)
+	var info map[string]interface{}
+	if err := parseBody(infoResp.Body, &info); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := info["secrets"]; ok {
+		t.Fatalf("function info response exposed secrets field: %v", info)
+	}
+
+	updateResp := dbReq(t, funexec.update, "POST", "/", map[string]interface{}{
+		"id":      fn.ID,
+		"code":    code,
+		"trigger": "web",
+	}, true)
+	defer updateResp.Body.Close()
+	if updateResp.StatusCode != http.StatusOK {
+		t.Fatal(GetResponseBody(t, updateResp))
+	}
+
+	execResp = dbReq(t, funexec.exec, "POST", "/fn/exec/fn-test-secrets", map[string]interface{}{}, false)
+	defer execResp.Body.Close()
+	if execResp.StatusCode != http.StatusOK {
+		t.Fatal(GetResponseBody(t, execResp))
+	}
+
+	time.Sleep(250 * time.Millisecond)
+
+	fn, err = backend.DB.GetFunctionByName(dbName, "fn-test-secrets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFunctionHistoryHasNoError(t, fn)
+
+	clearCode := `
+	function handle() {
+		if (secrets.apiKey !== undefined) {
+			log("ERROR: expected cleared secret value");
+			return;
+		}
+	}
+	`
+	updateResp = dbReq(t, funexec.update, "POST", "/", map[string]interface{}{
+		"id":      fn.ID,
+		"code":    clearCode,
+		"trigger": "web",
+		"secrets": "",
+	}, true)
+	defer updateResp.Body.Close()
+	if updateResp.StatusCode != http.StatusOK {
+		t.Fatal(GetResponseBody(t, updateResp))
+	}
+
+	execResp = dbReq(t, funexec.exec, "POST", "/fn/exec/fn-test-secrets", map[string]interface{}{}, false)
+	defer execResp.Body.Close()
+	if execResp.StatusCode != http.StatusOK {
+		t.Fatal(GetResponseBody(t, execResp))
+	}
+
+	time.Sleep(250 * time.Millisecond)
+
+	fn, err = backend.DB.GetFunctionByName(dbName, "fn-test-secrets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFunctionHistoryHasNoError(t, fn)
+}
+
+func assertFunctionHistoryHasNoError(t *testing.T, fn model.ExecData) {
+	t.Helper()
+
+	for _, h := range fn.History {
+		for _, line := range h.Output {
+			if strings.Contains(line, "ERROR") {
+				t.Fatalf("found error in function exec log: %v", h.Output)
+			}
+		}
+	}
+}
+
 func TestFunctionTriggerByDBChanges(t *testing.T) {
 	code := `
 	function handle(channel, type, data) {

@@ -14,6 +14,7 @@ type LocalExecData struct {
 	FunctionName string             `bson:"name" json:"name"`
 	TriggerTopic string             `bson:"tr" json:"trigger"`
 	Code         string             `bson:"code" json:"code"`
+	Secrets      []byte             `bson:"sec" json:"-"`
 	Version      int                `bson:"v" json:"version"`
 	LastUpdated  time.Time          `bson:"lu" json:"lastUpdated"`
 	LastRun      time.Time          `bson:"lr" json:"lastRun"`
@@ -41,6 +42,7 @@ func toLocalExecData(ex model.ExecData) LocalExecData {
 		FunctionName: ex.FunctionName,
 		TriggerTopic: ex.TriggerTopic,
 		Code:         ex.Code,
+		Secrets:      ex.Secrets,
 		Version:      ex.Version,
 		LastUpdated:  ex.LastUpdated,
 		LastRun:      ex.LastRun,
@@ -71,6 +73,7 @@ func fromLocalExecData(lex LocalExecData) model.ExecData {
 		FunctionName: lex.FunctionName,
 		TriggerTopic: lex.TriggerTopic,
 		Code:         lex.Code,
+		Secrets:      lex.Secrets,
 		Version:      lex.Version,
 		LastUpdated:  lex.LastUpdated,
 		LastRun:      lex.LastRun,
@@ -117,16 +120,21 @@ func (mg *Mongo) AddFunction(dbName string, data model.ExecData) (string, error)
 	return data.ID, nil
 }
 
-func (mg *Mongo) UpdateFunction(dbName, id, code, trigger string) error {
+func (mg *Mongo) UpdateFunction(dbName string, data model.FunctionUpdate) error {
 	db := mg.Client.Database(dbName)
 
-	oid, err := primitive.ObjectIDFromHex(id)
+	oid, err := primitive.ObjectIDFromHex(data.ID)
 	if err != nil {
 		return err
 	}
 
+	set := bson.M{"code": data.Code, "lu": time.Now(), "tr": data.TriggerTopic}
+	if data.UpdateSecrets {
+		set["sec"] = data.Secrets
+	}
+
 	update := bson.M{
-		"$set": bson.M{"code": code, "lu": time.Now(), "tr": trigger},
+		"$set": set,
 		"$inc": bson.M{"v": 1},
 	}
 	filter := bson.M{FieldID: oid}

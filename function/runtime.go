@@ -57,6 +57,9 @@ func (env *ExecutionEnvironment) Execute(data interface{}) error {
 	if err := env.addSendMail(vm); err != nil {
 		return err
 	}
+	if err := env.addSecrets(vm); err != nil {
+		return err
+	}
 
 	if _, err := vm.RunString(env.Data.Code); err != nil {
 		return err
@@ -87,6 +90,26 @@ func (env *ExecutionEnvironment) Execute(data interface{}) error {
 	}
 
 	return nil
+}
+
+func (env *ExecutionEnvironment) addSecrets(vm *goja.Runtime) error {
+	secrets, err := env.Data.GetSecrets()
+	if err != nil {
+		return err
+	}
+
+	obj := vm.NewObject()
+	for key, value := range secrets {
+		if err := obj.Set(key, value); err != nil {
+			return err
+		}
+	}
+
+	if err := vm.Set("secrets", obj); err != nil {
+		return err
+	}
+	_, err = vm.RunString("Object.freeze(secrets)")
+	return err
 }
 
 func (env *ExecutionEnvironment) prepareArguments(vm *goja.Runtime, data interface{}) ([]goja.Value, error) {

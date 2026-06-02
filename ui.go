@@ -516,7 +516,11 @@ func (x *ui) fnSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := backend.DB.UpdateFunction(conf.Name, id, code, trigger); err != nil {
+	if err := backend.DB.UpdateFunction(conf.Name, model.FunctionUpdate{
+		ID:           id,
+		Code:         code,
+		TriggerTopic: trigger,
+	}); err != nil {
 		renderErr(w, r, err, x.log)
 		return
 	}

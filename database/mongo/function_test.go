@@ -46,7 +46,11 @@ func TestUpdateFunction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := datastore.UpdateFunction(confDBName, id, "update", "web"); err != nil {
+	if err := datastore.UpdateFunction(confDBName, model.FunctionUpdate{
+		ID:           id,
+		Code:         "update",
+		TriggerTopic: "web",
+	}); err != nil {
 		t.Fatal(err)
 	}
 

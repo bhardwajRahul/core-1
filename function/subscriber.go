@@ -123,6 +123,11 @@ func (sub *Subscriber) handleRealtimeEvents(msg model.Command) {
 			sub.Log.Error().Err(err).Msg("error getting function out of cache")
 			return
 		}
+		fn, err = exe.DataStore.GetFunctionForExecution(exe.BaseName, fn.FunctionName)
+		if err != nil {
+			sub.Log.Error().Err(err).Msg("error getting function for execution")
+			return
+		}
 
 		exe.Data = fn
 		go func(ex *ExecutionEnvironment) {

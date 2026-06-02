@@ -46,7 +46,11 @@ func TestUpdateFunction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := datastore.UpdateFunction(confDBName, id, "update", "web"); err != nil {
+	if err := datastore.UpdateFunction(confDBName, model.FunctionUpdate{
+		ID:           id,
+		Code:         "update",
+		TriggerTopic: "web",
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -57,6 +61,64 @@ func TestUpdateFunction(t *testing.T) {
 		t.Errorf("expected code to be 'update' got %s", fn.Code)
 	} else if fn.Version != 2 {
 		t.Errorf("expected version to be 2 got %d", fn.Version)
+	}
+}
+
+func TestUpdateFunctionSecrets(t *testing.T) {
+	encrypted, err := model.EncryptFunctionSecrets("apiKey=first")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	id, err := datastore.AddFunction(confDBName, model.ExecData{
+		FunctionName: "update-secrets",
+		Code:         "init",
+		TriggerTopic: "web",
+		Secrets:      encrypted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := datastore.UpdateFunction(confDBName, model.FunctionUpdate{
+		ID:           id,
+		Code:         "preserve",
+		TriggerTopic: "web",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	fn, err := datastore.GetFunctionByID(confDBName, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secrets, err := fn.GetSecrets()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secrets["apiKey"] != "first" {
+		t.Fatalf("expected preserved secret got %v", secrets)
+	}
+
+	if err := datastore.UpdateFunction(confDBName, model.FunctionUpdate{
+		ID:            id,
+		Code:          "clear",
+		TriggerTopic:  "web",
+		UpdateSecrets: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	fn, err = datastore.GetFunctionByID(confDBName, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secrets, err = fn.GetSecrets()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(secrets) != 0 {
+		t.Fatalf("expected cleared secrets got %v", secrets)
 	}
 }
 

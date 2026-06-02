@@ -164,7 +164,7 @@ type Persister interface {
 	// AddFunction creates a server-side function
 	AddFunction(dbName string, data model.ExecData) (string, error)
 	// UpdateFunction updates a server-side function
-	UpdateFunction(dbName, id, code, trigger string) error
+	UpdateFunction(dbName string, data model.FunctionUpdate) error
 	// GetFunctionForExecution returns a function ready for execution
 	GetFunctionForExecution(dbName, name string) (model.ExecData, error)
 	// GetFunctionByID returns a function by its ID

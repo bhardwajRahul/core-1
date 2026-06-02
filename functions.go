@@ -22,18 +22,42 @@ func (f *functions) add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var data model.ExecData
-	if err := parseBody(r.Body, &data); err != nil {
+	data := new(struct {
+		ID           string `json:"id"`
+		AccountID    string `json:"accountId"`
+		FunctionName string `json:"name"`
+		TriggerTopic string `json:"trigger"`
+		Code         string `json:"code"`
+		Secrets      string `json:"secrets"`
+		Version      int    `json:"version"`
+	})
+	if err := parseBody(r.Body, data); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if _, err := backend.DB.AddFunction(conf.Name, data); err != nil {
+	secrets, err := model.EncryptFunctionSecrets(data.Secrets)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	fn := model.ExecData{
+		ID:           data.ID,
+		AccountID:    data.AccountID,
+		FunctionName: data.FunctionName,
+		TriggerTopic: data.TriggerTopic,
+		Code:         data.Code,
+		Secrets:      secrets,
+		Version:      data.Version,
+	}
+
+	if _, err := backend.DB.AddFunction(conf.Name, fn); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if err := refreshFunctionTriggerCache(conf.Name, data.TriggerTopic); err != nil {
+	if err := refreshFunctionTriggerCache(conf.Name, fn.TriggerTopic); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -49,16 +73,32 @@ func (f *functions) update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := new(struct {
-		ID      string `json:"id"`
-		Code    string `json:"code"`
-		Trigger string `json:"trigger"`
+		ID      string  `json:"id"`
+		Code    string  `json:"code"`
+		Trigger string  `json:"trigger"`
+		Secrets *string `json:"secrets"`
 	})
-	if err := parseBody(r.Body, &data); err != nil {
+	if err := parseBody(r.Body, data); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if err := backend.DB.UpdateFunction(conf.Name, data.ID, data.Code, data.Trigger); err != nil {
+	update := model.FunctionUpdate{
+		ID:           data.ID,
+		Code:         data.Code,
+		TriggerTopic: data.Trigger,
+	}
+	if data.Secrets != nil {
+		secrets, err := model.EncryptFunctionSecrets(*data.Secrets)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		update.Secrets = secrets
+		update.UpdateSecrets = true
+	}
+
+	if err := backend.DB.UpdateFunction(conf.Name, update); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

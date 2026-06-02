@@ -9,8 +9,8 @@ import (
 
 func (pg *PostgreSQL) AddFunction(dbName string, data model.ExecData) (id string, err error) {
 	qry := fmt.Sprintf(`
-		INSERT INTO %s.sb_functions(function_name, trigger_topic, code, version, last_updated, last_run)
-		VALUES($1, $2, $3, $4, $5, $6)
+		INSERT INTO %s.sb_functions(function_name, trigger_topic, code, function_secrets, version, last_updated, last_run)
+		VALUES($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id;
 	`, dbName)
 
@@ -19,21 +19,39 @@ func (pg *PostgreSQL) AddFunction(dbName string, data model.ExecData) (id string
 		data.FunctionName,
 		data.TriggerTopic,
 		data.Code,
+		data.Secrets,
 		data.Version,
 		data.LastUpdated,
 		data.LastRun,
 	).Scan(&id)
 	return
 }
-func (pg *PostgreSQL) UpdateFunction(dbName, id, code, trigger string) error {
+func (pg *PostgreSQL) UpdateFunction(dbName string, update model.FunctionUpdate) error {
 	qry := fmt.Sprintf(`
 		UPDATE %s.sb_functions SET
-			code = $3,
+			code = $2,
+			trigger_topic = $3,
 			version = version + 1
-		WHERE id = $1 AND trigger_topic = $2
+		WHERE id = $1
 	`, dbName)
 
-	if _, err := pg.DB.Exec(qry, id, trigger, code); err != nil {
+	if update.UpdateSecrets {
+		qry = fmt.Sprintf(`
+			UPDATE %s.sb_functions SET
+				code = $2,
+				trigger_topic = $3,
+				function_secrets = $4,
+				version = version + 1
+			WHERE id = $1
+		`, dbName)
+
+		if _, err := pg.DB.Exec(qry, update.ID, update.Code, update.TriggerTopic, update.Secrets); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if _, err := pg.DB.Exec(qry, update.ID, update.Code, update.TriggerTopic); err != nil {
 		return err
 	}
 	return nil
@@ -41,7 +59,7 @@ func (pg *PostgreSQL) UpdateFunction(dbName, id, code, trigger string) error {
 
 func (pg *PostgreSQL) GetFunctionForExecution(dbName, name string) (result model.ExecData, err error) {
 	qry := fmt.Sprintf(`
-		SELECT * 
+		SELECT id, function_name, trigger_topic, code, function_secrets, version, last_updated, last_run
 		FROM %s.sb_functions 
 		WHERE function_name = $1
 	`, dbName)
@@ -54,7 +72,7 @@ func (pg *PostgreSQL) GetFunctionForExecution(dbName, name string) (result model
 
 func (pg *PostgreSQL) GetFunctionByID(dbName, id string) (result model.ExecData, err error) {
 	qry := fmt.Sprintf(`
-		SELECT * 
+		SELECT id, function_name, trigger_topic, code, function_secrets, version, last_updated, last_run
 		FROM %s.sb_functions 
 		WHERE id = $1
 	`, dbName)
@@ -67,7 +85,7 @@ func (pg *PostgreSQL) GetFunctionByID(dbName, id string) (result model.ExecData,
 	}
 
 	qry = fmt.Sprintf(`
-		SELECT * 
+		SELECT id, function_id, version, started, completed, success, output
 		FROM %s.sb_function_logs 
 		WHERE function_id = $1
 		ORDER BY completed DESC
@@ -95,7 +113,7 @@ func (pg *PostgreSQL) GetFunctionByID(dbName, id string) (result model.ExecData,
 
 func (pg *PostgreSQL) GetFunctionByName(dbName, name string) (result model.ExecData, err error) {
 	qry := fmt.Sprintf(`
-		SELECT * 
+		SELECT id, function_name, trigger_topic, code, function_secrets, version, last_updated, last_run
 		FROM %s.sb_functions 
 		WHERE function_name = $1
 	`, dbName)
@@ -109,7 +127,7 @@ func (pg *PostgreSQL) GetFunctionByName(dbName, name string) (result model.ExecD
 
 	//TODO: this should be its own function and re-used from prev function
 	qry = fmt.Sprintf(`
-		SELECT * 
+		SELECT id, function_id, version, started, completed, success, output
 		FROM %s.sb_function_logs 
 		WHERE function_id = $1
 		ORDER BY completed DESC
@@ -137,7 +155,7 @@ func (pg *PostgreSQL) GetFunctionByName(dbName, name string) (result model.ExecD
 
 func (pg *PostgreSQL) ListFunctions(dbName string) (results []model.ExecData, err error) {
 	qry := fmt.Sprintf(`
-		SELECT * 
+		SELECT id, function_name, trigger_topic, code, function_secrets, version, last_updated, last_run
 		FROM %s.sb_functions 
 		ORDER BY last_updated DESC
 	`, dbName)
@@ -163,7 +181,7 @@ func (pg *PostgreSQL) ListFunctions(dbName string) (results []model.ExecData, er
 
 func (pg *PostgreSQL) ListFunctionsByTrigger(dbName, trigger string) (results []model.ExecData, err error) {
 	qry := fmt.Sprintf(`
-		SELECT * 
+		SELECT id, function_name, trigger_topic, code, function_secrets, version, last_updated, last_run
 		FROM %s.sb_functions 
 		WHERE trigger_topic = $1
 		ORDER BY last_updated DESC
@@ -235,6 +253,7 @@ func scanExecData(rows Scanner, ex *model.ExecData) error {
 		&ex.FunctionName,
 		&ex.TriggerTopic,
 		&ex.Code,
+		&ex.Secrets,
 		&ex.Version,
 		&ex.LastUpdated,
 		&ex.LastRun,

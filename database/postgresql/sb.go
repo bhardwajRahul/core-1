@@ -102,6 +102,7 @@ func (pg *PostgreSQL) createSystemTables(schema string) error {
 			function_name TEXT UNIQUE NOT NULL,
 			trigger_topic TEXT NOT NULL,
 			code TEXT NOT NULL,
+			function_secrets BYTEA,
 			version INTEGER NOT NULL,
 			last_updated timestamp NOT NULL,
 			last_run timestamp NOT NULL
