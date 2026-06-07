@@ -395,32 +395,15 @@ func (env *ExecutionEnvironment) addHelpers(vm *goja.Runtime) error {
 		responseChan := make(chan interface{})
 		go func() {
 			client := http.Client{Timeout: time.Duration(30) * time.Second}
-			var request *http.Request
-			var err error
-			bodyReader := strings.NewReader(fetchOptions.Body)
-			switch fetchOptions.Method {
-			case "GET":
-				request, err = http.NewRequest(http.MethodGet, url, nil)
-			case "POST":
-				request, err = http.NewRequest(http.MethodPost, url, bodyReader)
-			case "PUT":
-				request, err = http.NewRequest(http.MethodPut, url, bodyReader)
-			case "DELETE":
-				request, err = http.NewRequest(http.MethodDelete, url, bodyReader)
-			case "PATCH":
-				request, err = http.NewRequest(http.MethodPatch, url, bodyReader)
-			}
+			request, err := newFetchRequest(url, fetchOptions)
 			if err != nil {
 				responseChan <- err
-			}
-			for headerKey, headerValue := range fetchOptions.Headers {
-				if len(headerKey) > 0 && len(headerValue) > 0 {
-					request.Header.Set(headerKey, headerValue)
-				}
+				return
 			}
 			res, err := client.Do(request)
 			if err != nil {
 				responseChan <- err
+				return
 			}
 			responseChan <- res
 		}()
@@ -445,6 +428,37 @@ func (env *ExecutionEnvironment) addHelpers(vm *goja.Runtime) error {
 	}
 
 	return nil
+}
+
+func newFetchRequest(url string, fetchOptions JSFetchOptionsArg) (*http.Request, error) {
+	bodyReader := strings.NewReader(fetchOptions.Body)
+	var request *http.Request
+	var err error
+
+	switch strings.ToUpper(fetchOptions.Method) {
+	case "GET":
+		request, err = http.NewRequest(http.MethodGet, url, nil)
+	case "POST":
+		request, err = http.NewRequest(http.MethodPost, url, bodyReader)
+	case "PUT":
+		request, err = http.NewRequest(http.MethodPut, url, bodyReader)
+	case "DELETE":
+		request, err = http.NewRequest(http.MethodDelete, url, bodyReader)
+	case "PATCH":
+		request, err = http.NewRequest(http.MethodPatch, url, bodyReader)
+	default:
+		return nil, fmt.Errorf("unsupported fetch method: %s", fetchOptions.Method)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	for headerKey, headerValue := range fetchOptions.Headers {
+		if len(headerKey) > 0 && len(headerValue) > 0 {
+			request.Header.Set(headerKey, headerValue)
+		}
+	}
+	return request, nil
 }
 
 func (env *ExecutionEnvironment) addDatabaseFunctions(vm *goja.Runtime) error {

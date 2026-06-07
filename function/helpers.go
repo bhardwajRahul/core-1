@@ -1,18 +1,18 @@
 package function
 
 type JSFetchOptionsArg struct {
-	Method         string
-	Headers        map[string]string
-	Body           string
-	Mode           string
-	Credentials    string
-	Cache          string
-	Redirect       string
-	Referrer       string
-	ReferrerPolicy string
-	Integrity      string
-	Keepalive      string
-	Signal         string
+	Method         string            `json:"method"`
+	Headers        map[string]string `json:"headers"`
+	Body           string            `json:"body"`
+	Mode           string            `json:"mode"`
+	Credentials    string            `json:"credentials"`
+	Cache          string            `json:"cache"`
+	Redirect       string            `json:"redirect"`
+	Referrer       string            `json:"referrer"`
+	ReferrerPolicy string            `json:"referrerPolicy"`
+	Integrity      string            `json:"integrity"`
+	Keepalive      string            `json:"keepalive"`
+	Signal         string            `json:"signal"`
 }
 
 type HTTPResponse struct {

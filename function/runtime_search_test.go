@@ -2,12 +2,15 @@ package function
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/dop251/goja"
 	"github.com/staticbackendhq/core/cache"
 	"github.com/staticbackendhq/core/config"
 	"github.com/staticbackendhq/core/database/memory"
@@ -73,6 +76,45 @@ func TestRuntimeDatabaseHelpers(t *testing.T) {
 	}
 
 	assertFunctionCompleted(t, ctx.datastore, ctx.fn.ID)
+}
+
+func TestRuntimeFetchUsesRequestOptions(t *testing.T) {
+	vm := goja.New()
+	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+
+	optionsValue, err := vm.RunString(`({
+			method: "POST",
+			headers: {
+				"X-System-Key": "secret"
+			},
+			body: "payload"
+		})`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	options := NewJSFetcthOptionArg()
+	if err := vm.ExportTo(optionsValue, &options); err != nil {
+		t.Fatal(err)
+	}
+
+	req, err := newFetchRequest("https://example.test/submit", options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req.Method != http.MethodPost {
+		t.Fatalf("expected POST request, got %s", req.Method)
+	}
+	if req.Header.Get("X-System-Key") != "secret" {
+		t.Fatalf("expected X-System-Key header, got %q", req.Header.Get("X-System-Key"))
+	}
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "payload" {
+		t.Fatalf("expected request body payload, got %q", string(body))
+	}
 }
 
 func TestRuntimeBulkDatabaseHelpers(t *testing.T) {
