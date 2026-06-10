@@ -83,3 +83,112 @@ func TestSubscriberDBTriggerRecordsHistoryAndLastRun(t *testing.T) {
 
 	t.Fatal("timed out waiting for db-triggered function execution history")
 }
+
+func TestSubscriberTelemetryBypassesUserMessageThrottle(t *testing.T) {
+	baseName := "subscriber_telemetry_trigger"
+	log := logger.Get(config.LoadConfig())
+	vol := cache.NewDevCache(log)
+	ds := memory.New(vol.PublishDocument)
+
+	called := false
+	sub := &Subscriber{
+		PubSub: vol,
+		Log:    log,
+		GetExecEnv: func(msg model.Command) (*ExecutionEnvironment, error) {
+			called = true
+			return &ExecutionEnvironment{
+				Auth:      msg.Auth,
+				BaseName:  msg.Base,
+				DataStore: ds,
+				Volatile:  vol,
+				Log:       log,
+			}, nil
+		},
+	}
+	sub.relax.Store("user-1", int64(5))
+
+	sub.process(model.Command{
+		Channel: model.TelemetryLongRequestChannel,
+		Type:    model.MsgTypeTelemetryLongRequest,
+		Data:    `{"path":"/db/tasks"}`,
+		Base:    baseName,
+		Auth: model.Auth{
+			AccountID: "account-1",
+			UserID:    "user-1",
+			Token:     "token-1",
+		},
+	})
+
+	if !called {
+		t.Fatal("expected telemetry event to bypass user message throttle")
+	}
+}
+
+func TestSubscriberTelemetryTriggerRecordsHistory(t *testing.T) {
+	baseName := "subscriber_telemetry_history"
+	log := logger.Get(config.LoadConfig())
+	vol := cache.NewDevCache(log)
+	ds := memory.New(vol.PublishDocument)
+
+	fnID, err := ds.AddFunction(baseName, model.ExecData{
+		FunctionName: "capture-slow-request",
+		TriggerTopic: model.TelemetryLongRequestChannel,
+		Code: `function handle(channel, type, data) {
+			if (type != "telemetry_long_request") return;
+			log("slow " + data.method + " " + data.path);
+		}`,
+		Version: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sub := &Subscriber{
+		PubSub: vol,
+		Log:    log,
+		GetExecEnv: func(msg model.Command) (*ExecutionEnvironment, error) {
+			return &ExecutionEnvironment{
+				Auth:      msg.Auth,
+				BaseName:  msg.Base,
+				DataStore: ds,
+				Volatile:  vol,
+				Log:       log,
+			}, nil
+		},
+	}
+
+	sub.handleRealtimeEvents(model.Command{
+		Channel: model.TelemetryLongRequestChannel,
+		Type:    model.MsgTypeTelemetryLongRequest,
+		Data:    `{"method":"GET","path":"/db/tasks"}`,
+		Base:    baseName,
+		Auth: model.Auth{
+			AccountID: "account-1",
+			UserID:    "user-1",
+			Role:      100,
+			Token:     "token-1",
+		},
+	})
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		fn, err := ds.GetFunctionByID(baseName, fnID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(fn.History) == 0 {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		history := fn.History[len(fn.History)-1]
+		if !history.Success {
+			t.Fatalf("expected successful telemetry function execution history, got %+v", history)
+		}
+		if !strings.Contains(strings.Join(history.Output, "\n"), "slow GET /db/tasks") {
+			t.Fatalf("expected function output to include telemetry path, got %+v", history.Output)
+		}
+		return
+	}
+
+	t.Fatal("timed out waiting for telemetry function execution history")
+}

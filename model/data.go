@@ -65,6 +65,9 @@ const (
 	MsgTypeDBDeleted    = "db_deleted"
 	MsgTypeFunctionCall = "fn_call"
 	MsgTypeHTTPResponse = "http_response"
+
+	TelemetryLongRequestChannel = "telemetry-long-request"
+	MsgTypeTelemetryLongRequest = "telemetry_long_request"
 )
 
 type Command struct {

@@ -47,7 +47,8 @@ func (sub *Subscriber) process(msg model.Command) {
 	case model.MsgTypeChanOut,
 		model.MsgTypeDBCreated,
 		model.MsgTypeDBUpdated,
-		model.MsgTypeDBDeleted:
+		model.MsgTypeDBDeleted,
+		model.MsgTypeTelemetryLongRequest:
 		sub.handleRealtimeEvents(msg)
 	default:
 		// for user triggered events, we enforce a max of 5 msg / 60 secs

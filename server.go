@@ -115,17 +115,20 @@ func Start(c config.AppConfig, log *logger.Logger) {
 	pubWithDB := []middleware.Middleware{
 		middleware.Cors(),
 		middleware.WithDB(backend.DB, backend.Cache, getStripePortalURL),
+		middleware.LongRequestTelemetry(backend.Cache, log),
 	}
 
 	stdAuth := []middleware.Middleware{
 		middleware.Cors(),
 		middleware.WithDB(backend.DB, backend.Cache, getStripePortalURL),
 		middleware.RequireAuth(backend.DB, backend.Cache),
+		middleware.LongRequestTelemetry(backend.Cache, log),
 	}
 
 	stdRoot := []middleware.Middleware{
 		middleware.WithDB(backend.DB, backend.Cache, getStripePortalURL),
 		middleware.RequireRoot(backend.DB, backend.Cache),
+		middleware.LongRequestTelemetry(backend.Cache, log),
 	}
 
 	// static assets
