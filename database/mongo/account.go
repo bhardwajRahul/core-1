@@ -13,6 +13,8 @@ const (
 	FieldID        = "_id"
 	FieldAccountID = "accountId"
 	FieldOwnerID   = "sb_owner"
+	FieldSBOwnerID = "sb_ownerId"
+	FieldCreated   = "sb_created"
 	FieldToken     = "token"
 	FieldIsActive  = "active"
 	FieldRole      = "role"

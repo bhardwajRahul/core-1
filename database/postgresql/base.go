@@ -15,6 +15,8 @@ import (
 const (
 	FieldID        = "id"
 	FieldAccountID = "accountId"
+	FieldOwnerID   = "sb_ownerId"
+	FieldCreated   = "sb_created"
 	FieldFormName  = "sb_form"
 )
 
@@ -43,6 +45,7 @@ func (j *JSONB) Scan(value interface{}) error {
 
 func (pg *PostgreSQL) CreateDocument(auth model.Auth, dbName, col string, doc map[string]interface{}) (inserted map[string]interface{}, err error) {
 	inserted = doc
+	removeNotEditableFields(inserted)
 
 	cleancol := model.CleanCollectionName(col)
 
@@ -80,13 +83,16 @@ func (pg *PostgreSQL) CreateDocument(auth model.Auth, dbName, col string, doc ma
 		return
 	}
 
-	err = pg.DB.QueryRow(qry, auth.AccountID, auth.UserID, b, time.Now()).Scan(&id)
+	created := time.Now()
+	err = pg.DB.QueryRow(qry, auth.AccountID, auth.UserID, b, created).Scan(&id)
 	if err != nil {
 		err = fmt.Errorf("error getting the new row ID: %w", err)
 	}
 
 	inserted[FieldID] = id
 	inserted[FieldAccountID] = auth.AccountID
+	inserted[FieldOwnerID] = auth.UserID
+	inserted[FieldCreated] = created
 
 	pg.PublishDocument(auth, dbName, "db-"+col, model.MsgTypeDBCreated, inserted)
 
@@ -150,10 +156,7 @@ func (pg *PostgreSQL) ListDocuments(auth model.Auth, dbName, col string, params 
 			return
 		}
 
-		doc.Data[FieldID] = doc.ID
-		doc.Data[FieldAccountID] = doc.AccountID
-
-		result.Results = append(result.Results, doc.Data)
+		result.Results = append(result.Results, doc.Map())
 	}
 
 	err = rows.Err()
@@ -202,10 +205,7 @@ func (pg *PostgreSQL) QueryDocuments(auth model.Auth, dbName, col string, filter
 			return
 		}
 
-		doc.Data[FieldID] = doc.ID
-		doc.Data[FieldAccountID] = doc.AccountID
-
-		result.Results = append(result.Results, doc.Data)
+		result.Results = append(result.Results, doc.Map())
 	}
 
 	err = rows.Err()
@@ -228,10 +228,7 @@ func (pg *PostgreSQL) GetDocumentByID(auth model.Auth, dbName, col, id string) (
 		return nil, err
 	}
 
-	doc.Data[FieldID] = doc.ID
-	doc.Data[FieldAccountID] = doc.AccountID
-
-	return doc.Data, nil
+	return doc.Map(), nil
 }
 
 func (pg *PostgreSQL) GetDocumentsByIDs(auth model.Auth, dbName, col string, ids []string) (docs []map[string]interface{}, err error) {
@@ -255,9 +252,7 @@ func (pg *PostgreSQL) GetDocumentsByIDs(auth model.Auth, dbName, col string, ids
 			return []map[string]interface{}{}, err
 		}
 
-		doc.Data[FieldID] = doc.ID
-		doc.Data[FieldAccountID] = doc.AccountID
-		docs = append(docs, doc.Data)
+		docs = append(docs, doc.Map())
 	}
 
 	return docs, nil
@@ -265,6 +260,7 @@ func (pg *PostgreSQL) GetDocumentsByIDs(auth model.Auth, dbName, col string, ids
 
 func (pg *PostgreSQL) UpdateDocument(auth model.Auth, dbName, col, id string, doc map[string]interface{}) (map[string]interface{}, error) {
 	where := secureWrite(auth, col)
+	removeNotEditableFields(doc)
 
 	qry := fmt.Sprintf(`
 		UPDATE %s.%s SET
@@ -295,6 +291,7 @@ func (pg *PostgreSQL) UpdateDocuments(auth model.Auth, dbName, col string, filte
 	where := secureWrite(auth, col)
 	where, filterArgs := applyFilter(where, filters, 3)
 	queryArgs := append([]any{auth.AccountID, auth.UserID}, filterArgs...)
+	removeNotEditableFields(updateFields)
 
 	var ids []string
 	qry := fmt.Sprintf(`
@@ -471,6 +468,21 @@ func scanDocument(rows Scanner, doc *Document) error {
 		&doc.Data,
 		&doc.Created,
 	)
+}
+
+func (doc Document) Map() map[string]interface{} {
+	doc.Data[FieldID] = doc.ID
+	doc.Data[FieldAccountID] = doc.AccountID
+	doc.Data[FieldOwnerID] = doc.OwnerID
+	doc.Data[FieldCreated] = doc.Created
+	return doc.Data
+}
+
+func removeNotEditableFields(m map[string]any) {
+	delete(m, FieldID)
+	delete(m, FieldAccountID)
+	delete(m, FieldOwnerID)
+	delete(m, FieldCreated)
 }
 
 func isTableExists(err error) bool {

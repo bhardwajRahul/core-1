@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/staticbackendhq/core/model"
 
@@ -23,6 +24,8 @@ func (mg *Mongo) CreateDocument(auth model.Auth, dbName, col string, doc map[str
 	delete(doc, FieldID)
 	delete(doc, FieldAccountID)
 	delete(doc, FieldOwnerID)
+	delete(doc, FieldSBOwnerID)
+	delete(doc, FieldCreated)
 
 	acctID, userID, err := parseObjectID(auth)
 	if err != nil {
@@ -34,6 +37,7 @@ func (mg *Mongo) CreateDocument(auth model.Auth, dbName, col string, doc map[str
 	doc[FieldID] = newID
 	doc[FieldAccountID] = acctID
 	doc[FieldOwnerID] = userID
+	doc[FieldCreated] = time.Now()
 
 	if _, err := db.Collection(model.CleanCollectionName(col)).InsertOne(mg.Ctx, doc); err != nil {
 		return nil, err
@@ -131,10 +135,13 @@ func (mg *Mongo) BulkCreateDocument(auth model.Auth, dbName, col string, docs []
 		delete(doc, FieldID)
 		delete(doc, FieldAccountID)
 		delete(doc, FieldOwnerID)
+		delete(doc, FieldSBOwnerID)
+		delete(doc, FieldCreated)
 
 		doc[FieldID] = primitive.NewObjectID()
 		doc[FieldAccountID] = acctID
 		doc[FieldOwnerID] = userID
+		doc[FieldCreated] = time.Now()
 	}
 
 	if _, err := db.Collection(model.CleanCollectionName(col)).InsertMany(mg.Ctx, docs); err != nil {
@@ -610,6 +617,10 @@ func cleanMap(m map[string]interface{}) {
 
 	m[FieldAccountID] = oid.Hex()
 
+	oid, ok = m[FieldOwnerID].(primitive.ObjectID)
+	if ok {
+		m[FieldSBOwnerID] = oid.Hex()
+	}
 	delete(m, FieldOwnerID)
 }
 
@@ -618,4 +629,6 @@ func removeNotEditableFields(m map[string]any) {
 	delete(m, FieldID)
 	delete(m, FieldAccountID)
 	delete(m, FieldOwnerID)
+	delete(m, FieldSBOwnerID)
+	delete(m, FieldCreated)
 }

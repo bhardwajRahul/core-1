@@ -13,11 +13,13 @@ import (
 const (
 	FieldID        = "id"
 	FieldAccountID = "accountId"
-	FieldOwnerID   = "ownerId"
+	FieldOwnerID   = "sb_ownerId"
 	FieldCreated   = "sb_created"
 )
 
 func (m *Memory) CreateDocument(auth model.Auth, dbName, col string, doc map[string]interface{}) (map[string]interface{}, error) {
+	removeNotEditableFields(doc)
+
 	id := m.NewID()
 	doc[FieldID] = id
 	doc[FieldAccountID] = auth.AccountID
@@ -389,6 +391,7 @@ func removeNotEditableFields(m map[string]any) {
 	delete(m, FieldID)
 	delete(m, FieldAccountID)
 	delete(m, FieldOwnerID)
+	delete(m, FieldCreated)
 }
 
 func equal(v any, val any) bool {

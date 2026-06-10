@@ -16,6 +16,8 @@ import (
 const (
 	FieldID        = "id"
 	FieldAccountID = "accountId"
+	FieldOwnerID   = "sb_ownerId"
+	FieldCreated   = "sb_created"
 	FieldFormName  = "sb_form"
 )
 
@@ -49,6 +51,7 @@ func (j *JSON) Scan(value interface{}) error {
 
 func (sl *SQLite) CreateDocument(auth model.Auth, dbName, col string, doc map[string]interface{}) (inserted map[string]interface{}, err error) {
 	inserted = doc
+	removeNotEditableFields(inserted)
 
 	cleancol := model.CleanCollectionName(col)
 
@@ -100,13 +103,16 @@ func (sl *SQLite) CreateDocument(auth model.Auth, dbName, col string, doc map[st
 	// TODO: sqlite BUSY error in unit test
 	time.Sleep(10 * time.Millisecond)
 
-	_, err = sl.DB.Exec(qry, id, auth.AccountID, auth.UserID, b, time.Now())
+	created := time.Now()
+	_, err = sl.DB.Exec(qry, id, auth.AccountID, auth.UserID, b, created)
 	if err != nil {
 		err = fmt.Errorf("error getting the new row ID: %w", err)
 	}
 
 	inserted[FieldID] = id
 	inserted[FieldAccountID] = auth.AccountID
+	inserted[FieldOwnerID] = auth.UserID
+	inserted[FieldCreated] = created
 
 	sl.PublishDocument(auth, dbName, "db-"+col, model.MsgTypeDBCreated, inserted)
 
@@ -170,10 +176,7 @@ func (sl *SQLite) ListDocuments(auth model.Auth, dbName, col string, params mode
 			return
 		}
 
-		doc.Data[FieldID] = doc.ID
-		doc.Data[FieldAccountID] = doc.AccountID
-
-		result.Results = append(result.Results, doc.Data)
+		result.Results = append(result.Results, doc.Map())
 	}
 
 	err = rows.Err()
@@ -222,10 +225,7 @@ func (sl *SQLite) QueryDocuments(auth model.Auth, dbName, col string, filters ma
 			return
 		}
 
-		doc.Data[FieldID] = doc.ID
-		doc.Data[FieldAccountID] = doc.AccountID
-
-		result.Results = append(result.Results, doc.Data)
+		result.Results = append(result.Results, doc.Map())
 	}
 
 	err = rows.Err()
@@ -248,10 +248,7 @@ func (sl *SQLite) GetDocumentByID(auth model.Auth, dbName, col, id string) (map[
 		return nil, err
 	}
 
-	doc.Data[FieldID] = doc.ID
-	doc.Data[FieldAccountID] = doc.AccountID
-
-	return doc.Data, nil
+	return doc.Map(), nil
 }
 
 func (sl *SQLite) GetDocumentsByIDs(auth model.Auth, dbName, col string, ids []string) (docs []map[string]interface{}, err error) {
@@ -275,9 +272,7 @@ func (sl *SQLite) GetDocumentsByIDs(auth model.Auth, dbName, col string, ids []s
 			return []map[string]interface{}{}, err
 		}
 
-		doc.Data[FieldID] = doc.ID
-		doc.Data[FieldAccountID] = doc.AccountID
-		docs = append(docs, doc.Data)
+		docs = append(docs, doc.Map())
 	}
 
 	return docs, nil
@@ -292,6 +287,7 @@ func (sl *SQLite) UpdateDocument(auth model.Auth, dbName, col, id string, doc ma
 	for key, val := range doc {
 		orig[key] = val
 	}
+	removeNotEditableFields(orig)
 
 	where := secureWrite(auth, col)
 
@@ -325,6 +321,7 @@ func (sl *SQLite) UpdateDocuments(auth model.Auth, dbName, col string, filters m
 	where := secureWrite(auth, col)
 	where, filterArgs := applyFilter(where, filters, 3)
 	queryArgs := append([]any{auth.AccountID, auth.UserID}, filterArgs...)
+	removeNotEditableFields(updateFields)
 
 	var ids []string
 	qry := fmt.Sprintf(`
@@ -516,6 +513,21 @@ func scanDocument(rows Scanner, doc *Document) error {
 		&doc.Data,
 		&doc.Created,
 	)
+}
+
+func (doc Document) Map() map[string]interface{} {
+	doc.Data[FieldID] = doc.ID
+	doc.Data[FieldAccountID] = doc.AccountID
+	doc.Data[FieldOwnerID] = doc.OwnerID
+	doc.Data[FieldCreated] = doc.Created
+	return doc.Data
+}
+
+func removeNotEditableFields(m map[string]any) {
+	delete(m, FieldID)
+	delete(m, FieldAccountID)
+	delete(m, FieldOwnerID)
+	delete(m, FieldCreated)
 }
 
 func isTableExists(err error) bool {

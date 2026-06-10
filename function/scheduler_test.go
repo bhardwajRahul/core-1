@@ -71,8 +71,8 @@ func TestTaskSchedulerUsesRootAuthForFunctionTask(t *testing.T) {
 	if doc["accountId"] != rootAuth.AccountID {
 		t.Fatalf("expected document accountId %q got %v", rootAuth.AccountID, doc["accountId"])
 	}
-	if doc["ownerId"] != rootAuth.UserID {
-		t.Fatalf("expected document ownerId %q got %v", rootAuth.UserID, doc["ownerId"])
+	if doc["sb_ownerId"] != rootAuth.UserID {
+		t.Fatalf("expected document sb_ownerId %q got %v", rootAuth.UserID, doc["sb_ownerId"])
 	}
 
 	waitForFunctionHistory(t, ds, baseName, fn.FunctionName)

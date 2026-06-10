@@ -69,6 +69,63 @@ func TestCreateDocument(t *testing.T) {
 	}
 }
 
+func TestDocumentMetadataFields(t *testing.T) {
+	doc := map[string]interface{}{
+		"title":   "metadata",
+		"ownerId": "user-defined-owner",
+		"created": "user-defined-created",
+	}
+
+	inserted, err := datastore.CreateDocument(adminAuth, confDBName, "metadata_tasks", doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertDocumentMetadata(t, inserted)
+	if inserted["ownerId"] != "user-defined-owner" {
+		t.Fatalf("expected user ownerId to be preserved got %v", inserted["ownerId"])
+	}
+	if inserted["created"] != "user-defined-created" {
+		t.Fatalf("expected user created to be preserved got %v", inserted["created"])
+	}
+
+	beforeOwner := inserted["sb_ownerId"]
+
+	updated, err := datastore.UpdateDocument(adminAuth, confDBName, "metadata_tasks", inserted["id"].(string), map[string]interface{}{
+		"title":      "metadata-updated",
+		"sb_ownerId": "changed-owner",
+		"sb_created": "changed-created",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertDocumentMetadata(t, updated)
+	if updated["sb_ownerId"] != beforeOwner {
+		t.Fatalf("expected sb_ownerId to remain %v got %v", beforeOwner, updated["sb_ownerId"])
+	}
+	if updated["sb_created"] == "changed-created" {
+		t.Fatalf("expected sb_created to remain provider owned")
+	}
+}
+
+func assertDocumentMetadata(t *testing.T, doc map[string]interface{}) {
+	t.Helper()
+
+	if doc["id"] == "" {
+		t.Fatalf("expected id to be set")
+	}
+	if doc["accountId"] != adminAuth.AccountID {
+		t.Fatalf("expected accountId %q got %v", adminAuth.AccountID, doc["accountId"])
+	}
+	if doc["sb_ownerId"] != adminAuth.UserID {
+		t.Fatalf("expected sb_ownerId %q got %v", adminAuth.UserID, doc["sb_ownerId"])
+	}
+	if doc["sb_created"] == nil {
+		t.Fatalf("expected sb_created to be set")
+	}
+}
+
 func TestBulkCreateDocument(t *testing.T) {
 	var many []interface{}
 	for i := 0; i < 5; i++ {
