@@ -261,11 +261,12 @@ func (el *ExternalLogins) getProvider(dbID, provider, reqID string, info model.O
 		config.Current.AppURL,
 	)
 
-	if provider == OAuthProviderTwitter {
+	switch provider {
+	case OAuthProviderTwitter:
 		return twitter.New(info.ConsumerKey, info.ConsumerSecret, callbackURL), nil
-	} else if provider == OAuthProviderFacebook {
+	case OAuthProviderFacebook:
 		return facebook.New(info.ConsumerKey, info.ConsumerSecret, callbackURL), nil
-	} else if provider == OAuthProviderGoogle {
+	case OAuthProviderGoogle:
 		return google.New(info.ConsumerKey, info.ConsumerSecret, callbackURL), nil
 	}
 	return twitter.New("", "", ""), errors.New("invalid auth provider")

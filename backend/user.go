@@ -529,7 +529,7 @@ func (u User) SetupMagicLink(data MagicLinkData) error {
 		FromName: data.FromName,
 		To:       data.Email,
 		Subject:  data.Subject,
-		HTMLBody: strings.Replace(data.Body, "[link]", data.MagicLink, -1),
+		HTMLBody: strings.ReplaceAll(data.Body, "[link]", data.MagicLink),
 	}
 	if err := Emailer.Send(mail); err != nil {
 		return err

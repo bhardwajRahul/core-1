@@ -115,16 +115,16 @@ func listValues(v any) []any {
 func applyLegacyFilter(where string, filters map[string]interface{}) string {
 	for field, val := range filters {
 		if s, ok := val.(string); ok {
-			s = strings.Replace(s, "'", "''", -1)
+			s = strings.ReplaceAll(s, "'", "''")
 			where += fmt.Sprintf(" AND %s '%v'", field, s)
 		} else if list, ok := val.([]string); ok {
 			var s string
 			for _, item := range list {
-				s += fmt.Sprintf("'%s', ", strings.Replace(item, "'", "''", -1))
+				s += fmt.Sprintf("'%s', ", strings.ReplaceAll(item, "'", "''"))
 			}
 
 			s = strings.TrimRight(s, ", ")
-			where += fmt.Sprintf(" AND %s", strings.Replace(field, "_in_", s, -1))
+			where += fmt.Sprintf(" AND %s", strings.ReplaceAll(field, "_in_", s))
 		} else {
 			where += fmt.Sprintf(" AND %s %v", field, val)
 		}

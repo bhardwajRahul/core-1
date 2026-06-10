@@ -44,7 +44,7 @@ func (pg *PostgreSQL) ListFormSubmissions(dbName, name string) (results []map[st
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var data JSONB
@@ -70,7 +70,7 @@ func (pg *PostgreSQL) GetForms(dbName string) (results []string, err error) {
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var name string

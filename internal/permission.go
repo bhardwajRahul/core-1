@@ -29,7 +29,7 @@ func GetPermission(col string) (owner string, group string, everyone string) {
 		return
 	}
 
-	perm := strings.Replace(results[0], "_", "", -1)
+	perm := strings.ReplaceAll(results[0], "_", "")
 
 	if len(perm) != 3 {
 		return

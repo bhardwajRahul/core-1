@@ -25,7 +25,7 @@ func TestFileUpload(t *testing.T) {
 	writer := multipart.NewWriter(pw)
 
 	go func() {
-		defer writer.Close()
+		defer func() { _ = writer.Close() }()
 
 		part, err := writer.CreateFormFile("file", "upload.test")
 		if err != nil {
@@ -62,12 +62,12 @@ func TestFileUpload(t *testing.T) {
 	if err := parseBody(w.Result().Body, &data); err != nil {
 		t.Error(err)
 	}
-	defer w.Result().Body.Close()
+	defer func() { _ = w.Result().Body.Close() }()
 
 	t.Log(data)
 
 	// let's remove the web-based prefix to test if file was saved
-	localFilePath := strings.Replace(data.URL, "http://localhost:8099/localfs", "", -1)
+	localFilePath := strings.ReplaceAll(data.URL, "http://localhost:8099/localfs", "")
 
 	localFilePath = path.Join(os.TempDir(), localFilePath)
 
@@ -154,7 +154,7 @@ func TestStorageUsage(t *testing.T) {
 	}
 
 	resp := storageReq(t, storageUsage, string(token), "GET", "/storage/usage", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, resp))
@@ -213,7 +213,7 @@ func TestListFiles(t *testing.T) {
 	}
 
 	resp := storageReq(t, listFiles, string(token), "GET", "/storage/files", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, resp))
@@ -235,7 +235,7 @@ func TestListFiles(t *testing.T) {
 	}
 
 	resp = storageReq(t, listFiles, string(token), "GET", "/storage/files?page=2", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, resp))
@@ -252,7 +252,7 @@ func TestListFiles(t *testing.T) {
 	}
 
 	resp = storageReq(t, listFiles, string(token), "GET", "/storage/files?sort=size", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, resp))

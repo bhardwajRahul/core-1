@@ -170,7 +170,7 @@ func TestFunctionsExecuteDBOperations(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer addResp.Body.Close()
+		defer func() { _ = addResp.Body.Close() }()
 
 		t.Log(string(b))
 		t.Errorf("add: expected status 200 got %s", addResp.Status)
@@ -185,14 +185,14 @@ func TestFunctionsExecuteDBOperations(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer execResp.Body.Close()
+		defer func() { _ = execResp.Body.Close() }()
 
 		t.Log(string(b))
 		t.Errorf("expected status 200 got %s", execResp.Status)
 	}
 
 	infoResp := dbReq(t, funexec.info, "GET", "/fn/info/unittest", nil, true)
-	defer infoResp.Body.Close()
+	defer func() { _ = infoResp.Body.Close() }()
 
 	if infoResp.StatusCode >= 299 {
 		b, err := io.ReadAll(infoResp.Body)
@@ -207,7 +207,7 @@ func TestFunctionsExecuteDBOperations(t *testing.T) {
 	if err := parseBody(infoResp.Body, &checkFn); err != nil {
 		t.Fatal(err)
 	}
-	defer infoResp.Body.Close()
+	defer func() { _ = infoResp.Body.Close() }()
 
 	var errorLines []string
 	foundError := false
@@ -251,7 +251,7 @@ func TestFunctionSudoExecUsesRootAuth(t *testing.T) {
 		TriggerTopic: "web",
 	}
 	addResp := dbReq(t, funexec.add, "POST", "/", fn, true)
-	defer addResp.Body.Close()
+	defer func() { _ = addResp.Body.Close() }()
 	if addResp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, addResp))
 	}
@@ -304,7 +304,7 @@ func TestFunctionSudoExecUsesRootAuth(t *testing.T) {
 	}
 
 	execResp := dbReq(t, funexec.exec, "POST", "/fn/sudoexec/fn-test-sudoexec-root-auth", map[string]interface{}{}, true)
-	defer execResp.Body.Close()
+	defer func() { _ = execResp.Body.Close() }()
 	if execResp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, execResp))
 	}
@@ -318,7 +318,7 @@ func TestFunctionSudoExecUsesRootAuth(t *testing.T) {
 		if err := parseBody(infoResp.Body, &checkFn); err != nil {
 			t.Fatal(err)
 		}
-		infoResp.Body.Close()
+		_ = infoResp.Body.Close()
 
 		if len(checkFn.History) > 0 {
 			break
@@ -356,13 +356,13 @@ func TestFunctionSecretsCreateUpdateAndExecute(t *testing.T) {
 		"secrets": "apiKey=first+value&dash-key=dash+value",
 	}
 	addResp := dbReq(t, funexec.add, "POST", "/", data, true)
-	defer addResp.Body.Close()
+	defer func() { _ = addResp.Body.Close() }()
 	if addResp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, addResp))
 	}
 
 	execResp := dbReq(t, funexec.exec, "POST", "/fn/exec/fn-test-secrets", map[string]interface{}{}, false)
-	defer execResp.Body.Close()
+	defer func() { _ = execResp.Body.Close() }()
 	if execResp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, execResp))
 	}
@@ -389,13 +389,13 @@ func TestFunctionSecretsCreateUpdateAndExecute(t *testing.T) {
 		"code":    code,
 		"trigger": "web",
 	}, true)
-	defer updateResp.Body.Close()
+	defer func() { _ = updateResp.Body.Close() }()
 	if updateResp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, updateResp))
 	}
 
 	execResp = dbReq(t, funexec.exec, "POST", "/fn/exec/fn-test-secrets", map[string]interface{}{}, false)
-	defer execResp.Body.Close()
+	defer func() { _ = execResp.Body.Close() }()
 	if execResp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, execResp))
 	}
@@ -422,13 +422,13 @@ func TestFunctionSecretsCreateUpdateAndExecute(t *testing.T) {
 		"trigger": "web",
 		"secrets": "",
 	}, true)
-	defer updateResp.Body.Close()
+	defer func() { _ = updateResp.Body.Close() }()
 	if updateResp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, updateResp))
 	}
 
 	execResp = dbReq(t, funexec.exec, "POST", "/fn/exec/fn-test-secrets", map[string]interface{}{}, false)
-	defer execResp.Body.Close()
+	defer func() { _ = execResp.Body.Close() }()
 	if execResp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, execResp))
 	}
@@ -478,7 +478,7 @@ func TestFunctionTriggerByDBChanges(t *testing.T) {
 		TriggerTopic: "db-coltrigger",
 	}
 	addResp := dbReq(t, funexec.add, "POST", "/", data, true)
-	defer addResp.Body.Close()
+	defer func() { _ = addResp.Body.Close() }()
 	if addResp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, addResp))
 	}
@@ -492,7 +492,7 @@ func TestFunctionTriggerByDBChanges(t *testing.T) {
 	v.Name = "test"
 
 	dbResp := dbReq(t, db.add, "POST", "/db/coltrigger", v)
-	defer dbResp.Body.Close()
+	defer func() { _ = dbResp.Body.Close() }()
 	if dbResp.StatusCode >= 299 {
 		t.Fatal(GetResponseBody(t, dbResp))
 	} else if err := parseBody(dbResp.Body, &v); err != nil {
@@ -503,7 +503,7 @@ func TestFunctionTriggerByDBChanges(t *testing.T) {
 	time.Sleep(650 * time.Millisecond)
 
 	infoResp := dbReq(t, funexec.info, "GET", "/fn/info/fn-test-trigger", nil, true)
-	defer infoResp.Body.Close()
+	defer func() { _ = infoResp.Body.Close() }()
 
 	if infoResp.StatusCode >= 299 {
 		t.Fatal(GetResponseBody(t, infoResp))
@@ -542,7 +542,7 @@ func TestFunctionTriggerByDBChanges(t *testing.T) {
 	}
 
 	chkResp := dbReq(t, db.get, "GET", "/db/coltrigger/"+v.ID, nil)
-	defer chkResp.Body.Close()
+	defer func() { _ = chkResp.Body.Close() }()
 
 	if chkResp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, chkResp))
@@ -580,7 +580,7 @@ func TestFunctionTriggerBySystemAccountCreated(t *testing.T) {
 		TriggerTopic: "sys-sb_accounts",
 	}
 	addResp := dbReq(t, funexec.add, "POST", "/", data, true)
-	defer addResp.Body.Close()
+	defer func() { _ = addResp.Body.Close() }()
 	if addResp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, addResp))
 	}
@@ -634,7 +634,7 @@ func TestFunctionTriggerBySystemAccountCreated(t *testing.T) {
 	}
 
 	infoResp := dbReq(t, funexec.info, "GET", "/fn/info/fn-test-system-account-created", nil, true)
-	defer infoResp.Body.Close()
+	defer func() { _ = infoResp.Body.Close() }()
 	if infoResp.StatusCode >= 299 {
 		t.Fatal(GetResponseBody(t, infoResp))
 	}
@@ -676,7 +676,7 @@ func TestFunctionTriggerByPublishingMsg(t *testing.T) {
 		TriggerTopic: "custom-channel",
 	}
 	addResp := dbReq(t, funexec.add, "POST", "/", data, true)
-	defer addResp.Body.Close()
+	defer func() { _ = addResp.Body.Close() }()
 	if addResp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, addResp))
 	}
@@ -689,7 +689,7 @@ func TestFunctionTriggerByPublishingMsg(t *testing.T) {
 	v.Name = "test"
 
 	dbResp := dbReq(t, db.add, "POST", "/db/coltriggerpub", v)
-	defer dbResp.Body.Close()
+	defer func() { _ = dbResp.Body.Close() }()
 	if dbResp.StatusCode >= 299 {
 		t.Fatal(GetResponseBody(t, dbResp))
 	} else if err := parseBody(dbResp.Body, &v); err != nil {
@@ -712,7 +712,7 @@ func TestFunctionTriggerByPublishingMsg(t *testing.T) {
 	pubData.Data = string(b)
 
 	pubResp := dbReq(t, publishMessage, "POST", "/publish", pubData)
-	defer pubResp.Body.Close()
+	defer func() { _ = pubResp.Body.Close() }()
 	if pubResp.StatusCode >= 299 {
 		t.Fatal(GetResponseBody(t, pubResp))
 	}
@@ -721,7 +721,7 @@ func TestFunctionTriggerByPublishingMsg(t *testing.T) {
 	time.Sleep(650 * time.Millisecond)
 
 	infoResp := dbReq(t, funexec.info, "GET", "/fn/info/fn-pubmsg-trigger", nil, true)
-	defer infoResp.Body.Close()
+	defer func() { _ = infoResp.Body.Close() }()
 
 	if infoResp.StatusCode >= 299 {
 		t.Fatal(GetResponseBody(t, infoResp))
@@ -755,7 +755,7 @@ func TestFunctionTriggerByPublishingMsg(t *testing.T) {
 	}
 
 	chkResp := dbReq(t, db.get, "GET", "/db/coltriggerpub/"+v.ID, nil)
-	defer chkResp.Body.Close()
+	defer func() { _ = chkResp.Body.Close() }()
 
 	if chkResp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, chkResp))
@@ -825,7 +825,7 @@ func TestFunctionWithVolatilizerHelpers(t *testing.T) {
 		TriggerTopic: "trigger-from-unit-test",
 	}
 	addResp := dbReq(t, funexec.add, "POST", "/", data, true)
-	defer addResp.Body.Close()
+	defer func() { _ = addResp.Body.Close() }()
 	if addResp.StatusCode != http.StatusOK {
 		t.Fatal(GetResponseBody(t, addResp))
 	}
@@ -854,7 +854,7 @@ func TestFunctionWithVolatilizerHelpers(t *testing.T) {
 	time.Sleep(650 * time.Millisecond)
 
 	infoResp := dbReq(t, funexec.info, "GET", "/fn/info/fn-cache-tests", nil, true)
-	defer infoResp.Body.Close()
+	defer func() { _ = infoResp.Body.Close() }()
 
 	if infoResp.StatusCode >= 299 {
 		t.Fatal(GetResponseBody(t, infoResp))

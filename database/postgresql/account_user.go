@@ -78,7 +78,7 @@ func (pg *PostgreSQL) ListAccountUsers(dbName, userID string) (results []model.A
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var au model.AccountUser

@@ -300,7 +300,7 @@ func (ts *TaskScheduler) httpRequest(auth model.Auth, task model.Task) {
 		ts.Log.Err(err).Msg("error executing HTTP request")
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {

@@ -13,6 +13,7 @@ database/sqlite/test.db
 search/testdata
 **/*.fts
 **/*.db
+extra/testdata/out.jpg
 
 __debug_bin
 

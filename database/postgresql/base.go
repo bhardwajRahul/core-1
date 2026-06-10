@@ -148,7 +148,7 @@ func (pg *PostgreSQL) ListDocuments(auth model.Auth, dbName, col string, params 
 		pg.log.Error().Err(err).Msg("error in select")
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var doc Document
@@ -197,7 +197,7 @@ func (pg *PostgreSQL) QueryDocuments(auth model.Auth, dbName, col string, filter
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var doc Document
@@ -244,7 +244,7 @@ func (pg *PostgreSQL) GetDocumentsByIDs(auth model.Auth, dbName, col string, ids
 	if err != nil {
 		return []map[string]interface{}{}, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var doc Document
@@ -445,7 +445,7 @@ func (pg *PostgreSQL) ListCollections(dbName string) (results []string, err erro
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var name string

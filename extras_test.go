@@ -22,7 +22,7 @@ func TestUploadAndResizeImage(t *testing.T) {
 	buf := bytes.NewBuffer(b)
 
 	writer := multipart.NewWriter(buf)
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	part, err := writer.CreateFormFile("file", "src.png")
 	if err != nil {
@@ -33,7 +33,7 @@ func TestUploadAndResizeImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	if _, err := io.Copy(part, src); err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ func TestUploadAndResizeImage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	writer.Close()
+	_ = writer.Close()
 
 	req := httptest.NewRequest("POST", "/extra/resizeimg", bytes.NewReader(buf.Bytes()))
 	req.Header.Add("Content-Type", writer.FormDataContentType())
@@ -100,7 +100,7 @@ func TestSudoSendSMS(t *testing.T) {
 	}
 
 	resp := dbReq(t, extexec.sudoSendSMS, "POST", "/extra/sms", data, true)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		b, err := io.ReadAll(resp.Body)
@@ -123,7 +123,7 @@ func TestHtmlToPDF(t *testing.T) {
 	}
 
 	resp := dbReq(t, extexec.htmlToX, "POST", "/extras/htmltox", data)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		b, err := io.ReadAll(resp.Body)
@@ -149,7 +149,7 @@ func TestHtmlToPNG(t *testing.T) {
 	}
 
 	resp := dbReq(t, extexec.htmlToX, "POST", "/extras/htmltox", data)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		b, err := io.ReadAll(resp.Body)

@@ -90,7 +90,7 @@ func (mg *Mongo) ListTasksByBase(dbName string) ([]model.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cur.Close(mg.Ctx)
+	defer func() { _ = cur.Close(mg.Ctx) }()
 
 	var tasks []model.Task
 

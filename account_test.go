@@ -13,7 +13,7 @@ import (
 func TestUserAddRemoveFromAccount(t *testing.T) {
 	u := model.Login{Email: "newuser@test.com", Password: "newuser1234"}
 	resp := dbReq(t, acct.addUser, "POST", "/account/users", u)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -21,7 +21,7 @@ func TestUserAddRemoveFromAccount(t *testing.T) {
 
 	// adding user with same email should return an error
 	resp2 := dbReq(t, acct.addUser, "POST", "/account/users", u)
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 
 	if resp2.StatusCode <= 299 {
 		t.Fatal(GetResponseBody(t, resp2))
@@ -49,7 +49,7 @@ func TestUserAddRemoveFromAccount(t *testing.T) {
 	}
 
 	resp3 := dbReq(t, acct.deleteUser, "DELETE", "/account/users/"+newUserID, nil)
-	defer resp3.Body.Close()
+	defer func() { _ = resp3.Body.Close() }()
 
 	if resp3.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp3))
@@ -70,7 +70,7 @@ func TestUserAddRemoveFromAccount(t *testing.T) {
 
 func TestAddNewDatabase(t *testing.T) {
 	resp := dbReq(t, acct.addDatabase, "GET", "/account/add-db", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -79,7 +79,7 @@ func TestAddNewDatabase(t *testing.T) {
 
 func TestListAssociations(t *testing.T) {
 	resp := dbReq(t, acct.listAssociations, "GET", "/account/associations", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -94,7 +94,7 @@ func TestListAssociations(t *testing.T) {
 
 func TestGetUserAccounts(t *testing.T) {
 	resp := dbReq(t, acct.getUserAccounts, "GET", "/account/user-accounts?email="+admEmail, nil, true)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -127,7 +127,7 @@ func TestGetUserAccounts(t *testing.T) {
 
 func TestGetUserAccountsMissingEmail(t *testing.T) {
 	resp := dbReq(t, acct.getUserAccounts, "GET", "/account/user-accounts", nil, true)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("expected 400 got %d", resp.StatusCode)
@@ -159,7 +159,7 @@ func TestCrossAccountUserAssociation(t *testing.T) {
 	// addUser as the admin (testAccountID) with an email from a different account
 	// should create a cross-account association, not a new user record
 	resp := dbReq(t, acct.addUser, "POST", "/account/users", model.Login{Email: crossEmail})
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))

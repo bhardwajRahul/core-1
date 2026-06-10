@@ -73,11 +73,11 @@ func BuildRawEmail(data SendMailData) ([]byte, error) {
 	}
 
 	// Write email headers
-	buf.WriteString(fmt.Sprintf("From: %s\r\n", from))
-	buf.WriteString(fmt.Sprintf("To: %s\r\n", to))
-	buf.WriteString(fmt.Sprintf("Reply-To: %s\r\n", replyTo))
-	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", data.Subject))
-	buf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
+	_, _ = fmt.Fprintf(&buf, "From: %s\r\n", from)
+	_, _ = fmt.Fprintf(&buf, "To: %s\r\n", to)
+	_, _ = fmt.Fprintf(&buf, "Reply-To: %s\r\n", replyTo)
+	_, _ = fmt.Fprintf(&buf, "Subject: %s\r\n", data.Subject)
+	_, _ = fmt.Fprintf(&buf, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
 	buf.WriteString("MIME-Version: 1.0\r\n")
 
 	// Add transactional email header if flagged
@@ -89,7 +89,7 @@ func BuildRawEmail(data SendMailData) ([]byte, error) {
 	// Create multipart writer
 	writer := multipart.NewWriter(&buf)
 	boundary := writer.Boundary()
-	buf.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=\"%s\"\r\n\r\n", boundary))
+	_, _ = fmt.Fprintf(&buf, "Content-Type: multipart/mixed; boundary=\"%s\"\r\n\r\n", boundary)
 
 	// Add text/html alternative part
 	if data.HTMLBody != "" || data.TextBody != "" {
@@ -118,7 +118,9 @@ func BuildRawEmail(data SendMailData) ([]byte, error) {
 			if _, err := qpText.Write([]byte(data.TextBody)); err != nil {
 				return nil, fmt.Errorf("failed to write text part: %w", err)
 			}
-			qpText.Close()
+			if err := qpText.Close(); err != nil {
+				return nil, fmt.Errorf("failed to close text part: %w", err)
+			}
 		}
 
 		// Add HTML part
@@ -135,10 +137,14 @@ func BuildRawEmail(data SendMailData) ([]byte, error) {
 			if _, err := qpHTML.Write([]byte(data.HTMLBody)); err != nil {
 				return nil, fmt.Errorf("failed to write HTML part: %w", err)
 			}
-			qpHTML.Close()
+			if err := qpHTML.Close(); err != nil {
+				return nil, fmt.Errorf("failed to close HTML part: %w", err)
+			}
 		}
 
-		altWriter.Close()
+		if err := altWriter.Close(); err != nil {
+			return nil, fmt.Errorf("failed to close alternative part: %w", err)
+		}
 	}
 
 	// Add attachments
@@ -181,7 +187,9 @@ func BuildRawEmail(data SendMailData) ([]byte, error) {
 		}
 	}
 
-	writer.Close()
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close message writer: %w", err)
+	}
 
 	return buf.Bytes(), nil
 }

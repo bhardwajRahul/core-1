@@ -118,7 +118,7 @@ func (env *ExecutionEnvironment) prepareArguments(vm *goja.Runtime, data interfa
 	// for "web" trigger we prepare the body, query string and headers
 	r, ok := data.(*http.Request)
 	if ok {
-		defer r.Body.Close()
+		defer func() { _ = r.Body.Close() }()
 
 		// let's ready the HTTP body
 		contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -417,7 +417,7 @@ func (env *ExecutionEnvironment) addHelpers(vm *goja.Runtime) error {
 			if err != nil {
 				return vm.ToValue(Result{OK: false, Content: fmt.Sprintf("error calling fetch(): %s", err.Error())})
 			}
-			response.Body.Close()
+			_ = response.Body.Close()
 
 			return vm.ToValue(Result{OK: true, Content: HTTPResponse{Status: response.StatusCode, Body: string(bodyBytes)}})
 		}

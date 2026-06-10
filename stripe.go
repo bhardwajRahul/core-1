@@ -41,7 +41,8 @@ func (wh *stripeWebhook) process(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if event.Type == "customer.subscription.updated" {
+	switch event.Type {
+	case "customer.subscription.updated":
 		var sub stripe.Subscription
 		err := json.Unmarshal(event.Data.Raw, &sub)
 		if err != nil {
@@ -51,7 +52,7 @@ func (wh *stripeWebhook) process(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		go wh.handleSubChanged(sub)
-	} else if event.Type == "customer.subscription.deleted" {
+	case "customer.subscription.deleted":
 		var sub stripe.Subscription
 		err := json.Unmarshal(event.Data.Raw, &sub)
 		if err != nil {
@@ -61,7 +62,7 @@ func (wh *stripeWebhook) process(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		go wh.handleSubCancelled(sub)
-	} else if event.Type == "checkout.session.completed" {
+	case "checkout.session.completed":
 		var cs stripe.CheckoutSession
 		if err := json.Unmarshal(event.Data.Raw, &cs); err != nil {
 			wh.log.Error().Err(err).Msg("STRIPE ERROR (checkout session completed JSON))")
@@ -71,7 +72,7 @@ func (wh *stripeWebhook) process(w http.ResponseWriter, r *http.Request) {
 		}
 
 		wh.handleCheckoutSessionCompleted(cs)
-	} else {
+	default:
 		log.Printf("received unhandled Stripe webhook: %s\n", event.Type)
 	}
 

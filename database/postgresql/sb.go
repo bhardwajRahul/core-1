@@ -61,7 +61,7 @@ func (pg *PostgreSQL) CreateDatabase(base model.DatabaseConfig) (b model.Databas
 }
 
 func (pg *PostgreSQL) createSystemTables(schema string) error {
-	qry := strings.Replace(`
+	qry := strings.ReplaceAll(`
 		CREATE TABLE IF NOT EXISTS {schema}.sb_accounts (
 			id uuid PRIMARY KEY DEFAULT uuid_generate_v4 (),
 			email TEXT UNIQUE NOT NULL,
@@ -139,7 +139,7 @@ func (pg *PostgreSQL) createSystemTables(schema string) error {
 			created    TIMESTAMP NOT NULL,
 			UNIQUE(user_id, account_id)
 		);
-	`, "{schema}", schema, -1)
+`, "{schema}", schema)
 
 	if _, err := pg.DB.Exec(qry); err != nil {
 		return err
@@ -202,7 +202,7 @@ func (pg *PostgreSQL) ListDatabases() (results []model.DatabaseConfig, err error
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var base model.DatabaseConfig

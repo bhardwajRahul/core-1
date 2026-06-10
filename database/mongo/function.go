@@ -215,7 +215,7 @@ func (mg *Mongo) ListFunctions(dbName string) (results []model.ExecData, err err
 	if err != nil {
 		return
 	}
-	defer cur.Close(mg.Ctx)
+	defer func() { _ = cur.Close(mg.Ctx) }()
 
 	for cur.Next(mg.Ctx) {
 		var lex LocalExecData
@@ -242,7 +242,7 @@ func (mg *Mongo) ListFunctionsByTrigger(dbName, trigger string) (results []model
 	if err != nil {
 		return
 	}
-	defer cur.Close(mg.Ctx)
+	defer func() { _ = cur.Close(mg.Ctx) }()
 
 	for cur.Next(mg.Ctx) {
 		var lex LocalExecData

@@ -72,7 +72,7 @@ func (sl *SQLite) ListAllFiles(dbName, accountID string) (results []model.File, 
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var f model.File
@@ -134,7 +134,7 @@ func (sl *SQLite) ListFiles(dbName, accountID string, params model.ListParams) (
 		}
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var f model.File

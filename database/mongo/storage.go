@@ -131,7 +131,7 @@ func (mg *Mongo) ListAllFiles(dbName, accountID string) ([]model.File, error) {
 		return nil, err
 	}
 
-	defer sr.Close(mg.Ctx)
+	defer func() { _ = sr.Close(mg.Ctx) }()
 
 	var results []model.File
 
@@ -168,7 +168,7 @@ func (mg *Mongo) GetTotalFileBytes(dbName, accountID string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer cur.Close(mg.Ctx)
+	defer func() { _ = cur.Close(mg.Ctx) }()
 
 	var row struct {
 		Total int64 `bson:"total"`
@@ -222,7 +222,7 @@ func (mg *Mongo) ListFiles(dbName, accountID string, params model.ListParams) ([
 	if err != nil {
 		return nil, 0, err
 	}
-	defer sr.Close(mg.Ctx)
+	defer func() { _ = sr.Close(mg.Ctx) }()
 
 	results := make([]model.File, 0)
 	for sr.Next(mg.Ctx) {

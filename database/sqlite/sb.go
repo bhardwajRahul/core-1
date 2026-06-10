@@ -51,7 +51,7 @@ func (sl *SQLite) CreateDatabase(base model.DatabaseConfig) (b model.DatabaseCon
 }
 
 func (sl *SQLite) createSystemTables(schema string) error {
-	qry := strings.Replace(`
+	qry := strings.ReplaceAll(`
 		CREATE TABLE IF NOT EXISTS {schema}_sb_accounts (
 			id TEXT PRIMARY KEY,
 			email TEXT UNIQUE NOT NULL,
@@ -129,7 +129,7 @@ func (sl *SQLite) createSystemTables(schema string) error {
 			created    TIMESTAMP NOT NULL,
 			UNIQUE(user_id, account_id)
 		);
-	`, "{schema}", schema, -1)
+`, "{schema}", schema)
 
 	if _, err := sl.DB.Exec(qry); err != nil {
 		return err
@@ -192,7 +192,7 @@ func (sl *SQLite) ListDatabases() (results []model.DatabaseConfig, err error) {
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var base model.DatabaseConfig

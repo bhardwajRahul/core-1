@@ -83,7 +83,7 @@ func dbReq(t *testing.T, hf func(http.ResponseWriter, *http.Request), method, pa
 }
 
 func GetResponseBody(t *testing.T, resp *http.Response) string {
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal("error reading response body: ", err)
@@ -134,7 +134,7 @@ func TestDBCreate(t *testing.T) {
 		}
 
 	resp := dbReq(t, db.add, "POST", "/db/tasks", task)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -156,7 +156,7 @@ func TestDBUpdateShouldNotOverwriteDoc(t *testing.T) {
 		}
 
 	resp := dbReq(t, db.add, "POST", "/db/tasks", task)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -175,14 +175,14 @@ func TestDBUpdateShouldNotOverwriteDoc(t *testing.T) {
 	update.Done = true
 
 	uresp := dbReq(t, db.update, "PUT", "/db/tasks/"+saved.ID, update)
-	defer uresp.Body.Close()
+	defer func() { _ = uresp.Body.Close() }()
 
 	if uresp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, uresp))
 	}
 
 	resp = dbReq(t, db.get, "GET", "/db/tasks/"+saved.ID, nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -212,7 +212,7 @@ func TestDBListCollections(t *testing.T) {
 	h.ServeHTTP(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		b, err := io.ReadAll(resp.Body)
@@ -247,7 +247,7 @@ func TestListDocumentsInvalidDB(t *testing.T) {
 	h.ServeHTTP(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode > 299 {
 		b, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -280,7 +280,7 @@ func TestDBBulkUpdate(t *testing.T) {
 	}
 
 	resp := dbReq(t, db.bulkAdd, "POST", "/db/tasks/bulk", tasks)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -294,7 +294,7 @@ func TestDBBulkUpdate(t *testing.T) {
 	data.Clauses = append(data.Clauses, []interface{}{"title", "=", "should be updated"})
 
 	resp = dbReq(t, db.bulkUpdate, "PUT", "/db/tasks/bulk", data)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -321,7 +321,7 @@ func TestDBBulkDelete(t *testing.T) {
 	}
 
 	resp := dbReq(t, db.bulkAdd, "POST", "/db/tasks/bulk", tasks)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -340,7 +340,7 @@ func TestDBBulkDelete(t *testing.T) {
 
 	bulkDelURL := fmt.Sprintf("/db/tasks?bulk=1&x=%s", encoded)
 	resp2 := dbReq(t, db.bulkDelete, "DELETE", bulkDelURL, nil)
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 
 	if resp2.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -364,7 +364,7 @@ func TestDBQueryContainsOperator(t *testing.T) {
 	}
 
 	resp := dbReq(t, db.bulkAdd, "POST", "/db/tasks/bulk", tasks)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -376,7 +376,7 @@ func TestDBQueryContainsOperator(t *testing.T) {
 	}
 
 	resp = dbReq(t, db.query, "POST", "/query/tasks", clauses)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -397,7 +397,7 @@ func TestDBQueryContainsOperator(t *testing.T) {
 	}
 
 	resp = dbReq(t, db.query, "POST", "/query/tasks", clauses)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -430,7 +430,7 @@ func TestDBGetByIds(t *testing.T) {
 
 	for _, v := range tasks {
 		resp := dbReq(t, db.add, "POST", "/db/tasks", v)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode > 299 {
 			t.Fatal(GetResponseBody(t, resp))
@@ -445,7 +445,7 @@ func TestDBGetByIds(t *testing.T) {
 	}
 
 	resp := dbReq(t, db.getByIds, "POST", "/db/tasks?byids=1", data)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -469,7 +469,7 @@ func TestDBIncrease(t *testing.T) {
 		}
 
 	resp := dbReq(t, db.add, "POST", "/db/tasks", task)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -522,7 +522,7 @@ func TestDBCreateIndex(t *testing.T) {
 	h.ServeHTTP(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		b, err := io.ReadAll(resp.Body)
@@ -553,7 +553,7 @@ func TestDBCreateTypedIndex(t *testing.T) {
 	h.ServeHTTP(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		b, err := io.ReadAll(resp.Body)
@@ -581,7 +581,7 @@ func TestDBCreateTypedIndexRejectsUnsupportedType(t *testing.T) {
 	h.ServeHTTP(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected status 400 got %d", resp.StatusCode)
@@ -597,7 +597,7 @@ func TestDBSearchIndexAndQuery(t *testing.T) {
 		}
 
 	resp := dbReq(t, db.add, "POST", "/db/tasks", task)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -617,7 +617,7 @@ func TestDBSearchIndexAndQuery(t *testing.T) {
 
 	data := SearchData{Col: "tasks", Keywords: "adding search"}
 	resp2 := dbReq(t, db.search, "POST", "/search", data)
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 
 	if resp2.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp2))

@@ -76,10 +76,10 @@ func (pg *PostgreSQL) createIndex(dbName, col, field string, typ sbquery.ValueTy
 		USING btree (({expr}))
 	`
 
-	qry = strings.Replace(qry, "{index}", indexName, -1)
-	qry = strings.Replace(qry, "{col}", cleanCol, -1)
-	qry = strings.Replace(qry, "{expr}", expr, -1)
-	qry = strings.Replace(qry, "{schema}", dbName, -1)
+	qry = strings.ReplaceAll(qry, "{index}", indexName)
+	qry = strings.ReplaceAll(qry, "{col}", cleanCol)
+	qry = strings.ReplaceAll(qry, "{expr}", expr)
+	qry = strings.ReplaceAll(qry, "{schema}", dbName)
 
 	if _, err := pg.DB.Exec(qry); err != nil {
 		return err

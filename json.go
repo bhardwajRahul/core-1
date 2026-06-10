@@ -23,6 +23,6 @@ func respond(w http.ResponseWriter, code int, v interface{}) {
 }
 
 func parseBody(body io.ReadCloser, v interface{}) error {
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 	return json.NewDecoder(body).Decode(v)
 }

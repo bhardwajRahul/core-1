@@ -55,7 +55,7 @@ func RequireAuth(datastore database.Persister, volatile cache.Volatilizer) Middl
 				return
 			}
 
-			key = strings.Replace(key, "Bearer ", "", -1)
+			key = strings.ReplaceAll(key, "Bearer ", "")
 
 			ctx := r.Context()
 
@@ -187,7 +187,7 @@ func RequireRoot(datastore database.Persister, volatile cache.Volatilizer) Middl
 				return
 			}
 
-			key = strings.Replace(key, "Bearer ", "", -1)
+			key = strings.ReplaceAll(key, "Bearer ", "")
 
 			// in dev mode the cache will have a key called:
 			// dev-root-token which hold the dynamically changing root token

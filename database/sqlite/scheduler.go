@@ -35,7 +35,7 @@ func (sl *SQLite) ListTasksByBase(dbName string) (results []model.Task, err erro
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var t model.Task

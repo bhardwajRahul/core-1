@@ -117,7 +117,7 @@ func migrateAddAccountUsers(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var names []string
 	for rows.Next() {
@@ -132,7 +132,7 @@ func migrateAddAccountUsers(db *sql.DB) error {
 	}
 
 	for _, name := range names {
-		ddl := strings.Replace(`
+		ddl := strings.ReplaceAll(`
 			CREATE TABLE IF NOT EXISTS {schema}_sb_account_users (
 				id         TEXT PRIMARY KEY,
 				user_id    TEXT NOT NULL REFERENCES {schema}_sb_tokens(id)   ON DELETE CASCADE,
@@ -143,7 +143,7 @@ func migrateAddAccountUsers(db *sql.DB) error {
 				created    TIMESTAMP NOT NULL,
 				UNIQUE(user_id, account_id)
 			);
-		`, "{schema}", name, -1)
+		`, "{schema}", name)
 		if _, err := db.Exec(ddl); err != nil {
 			return err
 		}
@@ -156,7 +156,7 @@ func migrateAddFunctionSecrets(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var names []string
 	for rows.Next() {
@@ -171,10 +171,10 @@ func migrateAddFunctionSecrets(db *sql.DB) error {
 	}
 
 	for _, name := range names {
-		ddl := strings.Replace(`
+		ddl := strings.ReplaceAll(`
 			ALTER TABLE {schema}_sb_functions
 			ADD COLUMN function_secrets BLOB;
-		`, "{schema}", name, -1)
+		`, "{schema}", name)
 		if _, err := db.Exec(ddl); err != nil {
 			if strings.Contains(err.Error(), "duplicate column name") {
 				continue

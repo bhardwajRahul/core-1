@@ -61,7 +61,7 @@ func TestSendMailWithAttachment(t *testing.T) {
 
 	// Send the email
 	resp := dbReq(t, sudoSendMail, "POST", "/sudo/sendmail", data, true)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -75,7 +75,7 @@ func TestSendMailWithAttachment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query Mailpit API: %v", err)
 	}
-	defer mailpitResp.Body.Close()
+	defer func() { _ = mailpitResp.Body.Close() }()
 
 	if mailpitResp.StatusCode != http.StatusOK {
 		t.Fatalf("Mailpit API returned non-OK status: %d", mailpitResp.StatusCode)
@@ -135,7 +135,7 @@ func TestSendMailWithAttachment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get message details from Mailpit: %v", err)
 	}
-	defer msgResp.Body.Close()
+	defer func() { _ = msgResp.Body.Close() }()
 
 	var messageDetails struct {
 		Attachments []struct {

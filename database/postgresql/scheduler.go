@@ -35,7 +35,7 @@ func (pg *PostgreSQL) ListTasksByBase(dbName string) (results []model.Task, err 
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var t model.Task

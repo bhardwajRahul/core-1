@@ -325,7 +325,8 @@ func sudoCache(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method == http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
 		typ := r.URL.Query().Get("type")
 		key := fmt.Sprintf("%s_%s", conf.Name, r.URL.Query().Get("key"))
 
@@ -346,7 +347,7 @@ func sudoCache(w http.ResponseWriter, r *http.Request) {
 		}
 
 		respond(w, http.StatusOK, val)
-	} else if r.Method == http.MethodPost {
+	case http.MethodPost:
 		data := new(struct {
 			Key   string `json:"key"`
 			Value string `json:"value"`

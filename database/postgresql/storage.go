@@ -71,7 +71,7 @@ func (pg *PostgreSQL) ListAllFiles(dbName, accountID string) (results []model.Fi
 		return
 	}
 
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var f model.File
@@ -134,7 +134,7 @@ func (pg *PostgreSQL) ListFiles(dbName, accountID string, params model.ListParam
 		}
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var f model.File

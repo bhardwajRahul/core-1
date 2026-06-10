@@ -47,7 +47,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer dbConn.Close()
+	defer func() { _ = dbConn.Close() }()
 
 	datastore = &PostgreSQL{DB: dbConn, PublishDocument: fakePubDocEvent}
 

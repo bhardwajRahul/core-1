@@ -153,7 +153,10 @@ func (b *Broker) Accept(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			fmt.Fprintf(w, "data: %s\n\n", bytes)
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", bytes); err != nil {
+				b.log.Warn().Err(err).Msg("error writing server sent event")
+				continue
+			}
 
 			// flush immediately.
 			flusher.Flush()

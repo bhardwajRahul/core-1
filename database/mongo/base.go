@@ -196,7 +196,7 @@ func (mg *Mongo) ListDocuments(auth model.Auth, dbName, col string, params model
 	if err != nil {
 		return result, err
 	}
-	defer cur.Close(mg.Ctx)
+	defer func() { _ = cur.Close(mg.Ctx) }()
 
 	var results []map[string]interface{}
 
@@ -273,7 +273,7 @@ func (mg *Mongo) QueryDocuments(auth model.Auth, dbName, col string, filter map[
 	if err != nil {
 		return result, err
 	}
-	defer cur.Close(mg.Ctx)
+	defer func() { _ = cur.Close(mg.Ctx) }()
 
 	var results []map[string]interface{}
 	for cur.Next(mg.Ctx) {
@@ -576,7 +576,7 @@ func (mg *Mongo) ListCollections(dbName string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cur.Close(mg.Ctx)
+	defer func() { _ = cur.Close(mg.Ctx) }()
 
 	var names []string
 	for cur.Next(mg.Ctx) {

@@ -71,7 +71,7 @@ func (sl *SQLite) ListAccountUsers(dbName, userID string) (results []model.Accou
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var au model.AccountUser

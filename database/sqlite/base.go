@@ -168,7 +168,7 @@ func (sl *SQLite) ListDocuments(auth model.Auth, dbName, col string, params mode
 		sl.log.Error().Err(err).Msg("error in select")
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var doc Document
@@ -217,7 +217,7 @@ func (sl *SQLite) QueryDocuments(auth model.Auth, dbName, col string, filters ma
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var doc Document
@@ -264,7 +264,7 @@ func (sl *SQLite) GetDocumentsByIDs(auth model.Auth, dbName, col string, ids []s
 	if err != nil {
 		return []map[string]interface{}{}, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var doc Document
@@ -334,7 +334,7 @@ func (sl *SQLite) UpdateDocuments(auth model.Auth, dbName, col string, filters m
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var id string
@@ -444,7 +444,7 @@ func (sl *SQLite) DeleteDocuments(auth model.Auth, dbName, col string, filters m
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var id string
@@ -488,7 +488,7 @@ func (sl *SQLite) ListCollections(dbName string) (results []string, err error) {
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var name string
@@ -497,7 +497,7 @@ func (sl *SQLite) ListCollections(dbName string) (results []string, err error) {
 		}
 
 		// we remove the dbname from the collection name
-		name = strings.Replace(name, dbName+"_", "", -1)
+		name = strings.ReplaceAll(name, dbName+"_", "")
 		results = append(results, name)
 	}
 

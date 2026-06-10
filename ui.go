@@ -323,7 +323,8 @@ func (x ui) dbSave(w http.ResponseWriter, r *http.Request) {
 
 	update := make(map[string]interface{})
 
-	if typ == "int" {
+	switch typ {
+	case "int":
 		i, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			renderErr(w, r, err, x.log)
@@ -331,7 +332,7 @@ func (x ui) dbSave(w http.ResponseWriter, r *http.Request) {
 		}
 
 		update[field] = i
-	} else if typ == "float" {
+	case "float":
 		f, err := strconv.ParseFloat(value, 64)
 		if err != nil {
 			renderErr(w, r, err, x.log)
@@ -339,9 +340,9 @@ func (x ui) dbSave(w http.ResponseWriter, r *http.Request) {
 		}
 
 		update[field] = f
-	} else if typ == "bool" {
+	case "bool":
 		update[field] = value == "true"
-	} else {
+	default:
 		update[field] = value
 	}
 

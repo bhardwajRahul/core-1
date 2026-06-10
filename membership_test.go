@@ -17,7 +17,7 @@ import (
 
 func TestGetCurrentAuthUser(t *testing.T) {
 	resp := dbReq(t, mship.me, "GET", "/me", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -47,7 +47,7 @@ func TestChangeEmail(t *testing.T) {
 	}
 
 	resp := authReqWithToken(t, string(token), mship.changeEmail, "POST", "/me/email", map[string]string{"email": newEmail})
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
 	}
@@ -65,7 +65,7 @@ func TestChangeEmail(t *testing.T) {
 	}
 
 	resp = authReqWithToken(t, string(token), mship.me, "GET", "/me", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
 	}
@@ -93,7 +93,7 @@ func TestChangeEmailConflict(t *testing.T) {
 	}
 
 	resp := authReqWithToken(t, string(token), mship.changeEmail, "POST", "/me/email", map[string]string{"email": "change-conflict-existing@test.com"})
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusConflict {
 		t.Fatalf("expected 409 got %d: %s", resp.StatusCode, GetResponseBody(t, resp))
 	}
@@ -101,7 +101,7 @@ func TestChangeEmailConflict(t *testing.T) {
 
 func TestChangeEmailInvalidEmail(t *testing.T) {
 	resp := dbReq(t, mship.changeEmail, "POST", "/me/email", map[string]string{"email": "invalid"})
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400 got %d", resp.StatusCode)
 	}
@@ -129,7 +129,7 @@ func TestMagicLink(t *testing.T) {
 	data.MagicLink = "https://mycustom.link/with-code"
 
 	resp := dbReq(t, mship.magicLink, "POST", "/login/magic", data)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -138,7 +138,7 @@ func TestMagicLink(t *testing.T) {
 	// in dev mode, the code is always 666333
 	u := fmt.Sprintf("/login/magic?email=%s&code=666333", admEmail)
 	resp2 := dbReq(t, mship.magicLink, "GET", u, nil)
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 
 	if resp2.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp2))
@@ -147,7 +147,7 @@ func TestMagicLink(t *testing.T) {
 
 func TestGetAuthTokenByUserID(t *testing.T) {
 	resp := dbReq(t, mship.getAuthTokenByUserID, "GET", "/sudogetauthtokenbyuserid/"+testAccountID+"/"+adminAuthUserID(t), nil, true)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -198,7 +198,7 @@ func TestGetAuthTokenByUserIDForAccountAssociation(t *testing.T) {
 	}
 
 	resp := dbReq(t, mship.getAuthTokenByUserID, "GET", "/sudogetauthtokenbyuserid/"+testAccountID+"/"+userID, nil, true)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -213,7 +213,7 @@ func TestGetAuthTokenByUserIDForAccountAssociation(t *testing.T) {
 	}
 
 	resp = authReqWithToken(t, token, mship.me, "GET", "/me", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
 	}
@@ -244,7 +244,7 @@ func TestGetAuthTokenByUserIDForAccountAssociation(t *testing.T) {
 
 func TestGetAuthTokenByUserIDMissingParams(t *testing.T) {
 	resp := dbReq(t, mship.getAuthTokenByUserID, "GET", "/sudogetauthtokenbyuserid/"+testAccountID, nil, true)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400 got %d", resp.StatusCode)
@@ -254,7 +254,7 @@ func TestGetAuthTokenByUserIDMissingParams(t *testing.T) {
 func TestGetUserByID(t *testing.T) {
 	userID := adminAuthUserID(t)
 	resp := dbReq(t, mship.getUserByID, "GET", "/sudogetuserbyid/"+testAccountID+"/"+userID, nil, true)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
@@ -274,7 +274,7 @@ func TestGetUserByID(t *testing.T) {
 
 func TestGetUserByIDMissingParams(t *testing.T) {
 	resp := dbReq(t, mship.getUserByID, "GET", "/sudogetuserbyid/"+testAccountID, nil, true)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400 got %d", resp.StatusCode)

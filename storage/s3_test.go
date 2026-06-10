@@ -24,7 +24,7 @@ func TestS3Storage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	finfo, err := f.Stat()
 	if err != nil {
@@ -51,7 +51,7 @@ func TestS3Storage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	x, err := io.ReadAll(resp.Body)
 	if err != nil {

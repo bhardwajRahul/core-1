@@ -161,7 +161,7 @@ func (mg *Mongo) GetFirstUserFromAccountID(dbName, accountID string) (tok model.
 	if err != nil {
 		return
 	}
-	defer cur.Close(mg.Ctx)
+	defer func() { _ = cur.Close(mg.Ctx) }()
 
 	var lt LocalToken
 	if cur.Next(mg.Ctx) {

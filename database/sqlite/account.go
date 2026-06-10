@@ -56,7 +56,7 @@ func (sl *SQLite) ListAccounts(dbName string) ([]model.Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var list []model.Account
 	for rows.Next() {
@@ -85,7 +85,7 @@ func (sl *SQLite) ListUsers(dbName, accountID string) ([]model.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var list []model.User
 	for rows.Next() {

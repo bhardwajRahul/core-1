@@ -44,7 +44,7 @@ func (sl *SQLite) ListFormSubmissions(dbName, name string) (results []map[string
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var data JSON
@@ -70,7 +70,7 @@ func (sl *SQLite) GetForms(dbName string) (results []string, err error) {
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var name string

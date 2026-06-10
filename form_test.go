@@ -11,14 +11,14 @@ func TestFormSubmission(t *testing.T) {
 	val.Add("email", "unit@test.com")
 
 	resp := dbReq(t, submitForm, "POST", "/postform/testform", val, false, true)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode > 299 {
 		t.Fatal(GetResponseBody(t, resp))
 	}
 
 	resp2 := dbReq(t, listForm, "GET", "/form?name=testform", nil, true)
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 
 	var results []map[string]interface{}
 	if err := parseBody(resp2.Body, &results); err != nil {

@@ -11,13 +11,13 @@ func TestResizeImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	out, err := os.Create("./testdata/out.jpg")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	if err := ResizeImage("src.png", src, out, 1600.0); err != nil {
 		t.Fatal(err)
@@ -27,7 +27,7 @@ func TestResizeImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	img, err := jpeg.Decode(f)
 	if err != nil {

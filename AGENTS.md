@@ -31,7 +31,7 @@ checks.
 
 ## Coding Style & Naming Conventions
 
-Use Go 1.25 as declared in `go.mod`. Format Go changes with `gofmt`; the
+Use Go 1.26.4 as declared in `go.mod`. Format Go changes with `gofmt`; the
 project uses tabs for indentation. Keep package names short and lowercase. Name
 tests `TestXxx` in `_test.go` files beside the code under test. Prefer existing
 interfaces and provider patterns before adding abstractions.

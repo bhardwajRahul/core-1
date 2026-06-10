@@ -96,7 +96,7 @@ func (pg *PostgreSQL) GetFunctionByID(dbName, id string) (result model.ExecData,
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var h model.ExecHistory
@@ -138,7 +138,7 @@ func (pg *PostgreSQL) GetFunctionByName(dbName, name string) (result model.ExecD
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var h model.ExecHistory
@@ -164,7 +164,7 @@ func (pg *PostgreSQL) ListFunctions(dbName string) (results []model.ExecData, er
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var ex model.ExecData
@@ -191,7 +191,7 @@ func (pg *PostgreSQL) ListFunctionsByTrigger(dbName, trigger string) (results []
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var ex model.ExecData

@@ -52,9 +52,9 @@ func (sl *SQLite) CreateIndex(dbName, col, field string) error {
 			ON {schema}_{col}({field}, json_extract(data, "$.{field}"));
 		`
 
-		qry = strings.Replace(qry, "{col}", model.CleanCollectionName(col), -1)
-		qry = strings.Replace(qry, "{field}", field, -1)
-		qry = strings.Replace(qry, "{schema}", dbName, -1)
+		qry = strings.ReplaceAll(qry, "{col}", model.CleanCollectionName(col))
+		qry = strings.ReplaceAll(qry, "{field}", field)
+		qry = strings.ReplaceAll(qry, "{schema}", dbName)
 
 		if _, err := sl.DB.Exec(qry); err != nil {
 			return err

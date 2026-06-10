@@ -98,7 +98,7 @@ func (sl *SQLite) GetFunctionByID(dbName, id string) (result model.ExecData, err
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var h model.ExecHistory
@@ -140,7 +140,7 @@ func (sl *SQLite) GetFunctionByName(dbName, name string) (result model.ExecData,
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var h model.ExecHistory
@@ -166,7 +166,7 @@ func (sl *SQLite) ListFunctions(dbName string) (results []model.ExecData, err er
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var ex model.ExecData
@@ -193,7 +193,7 @@ func (sl *SQLite) ListFunctionsByTrigger(dbName, trigger string) (results []mode
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var ex model.ExecData

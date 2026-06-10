@@ -22,7 +22,8 @@ type Database struct {
 }
 
 func (database *Database) dbreq(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
+	switch r.Method {
+	case http.MethodPost:
 		if len(r.URL.Query().Get("bulk")) > 0 {
 			database.bulkAdd(w, r)
 		} else if r.URL.Query().Has("ids") {
@@ -30,19 +31,19 @@ func (database *Database) dbreq(w http.ResponseWriter, r *http.Request) {
 		} else {
 			database.add(w, r)
 		}
-	} else if r.Method == http.MethodPut {
+	case http.MethodPut:
 		if len(r.URL.Query().Get("bulk")) > 0 {
 			database.bulkUpdate(w, r)
 		} else {
 			database.update(w, r)
 		}
-	} else if r.Method == http.MethodDelete {
+	case http.MethodDelete:
 		if len(r.URL.Query().Get("bulk")) > 0 {
 			database.bulkDelete(w, r)
 		} else {
 			database.del(w, r)
 		}
-	} else if r.Method == http.MethodGet {
+	case http.MethodGet:
 		p := r.URL.Path
 		if !strings.HasSuffix(p, "/") {
 			p += "/"
@@ -55,7 +56,7 @@ func (database *Database) dbreq(w http.ResponseWriter, r *http.Request) {
 		} else {
 			database.get(w, r)
 		}
-	} else {
+	default:
 		http.Error(w, "not found", http.StatusNotFound)
 	}
 }

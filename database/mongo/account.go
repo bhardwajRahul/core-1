@@ -137,7 +137,7 @@ func (mg *Mongo) ListAccounts(dbName string) ([]model.Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cur.Close(mg.Ctx)
+	defer func() { _ = cur.Close(mg.Ctx) }()
 
 	var list []model.Account
 
@@ -171,7 +171,7 @@ func (mg *Mongo) ListUsers(dbName, accountID string) ([]model.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cur.Close(mg.Ctx)
+	defer func() { _ = cur.Close(mg.Ctx) }()
 
 	var list []model.User
 

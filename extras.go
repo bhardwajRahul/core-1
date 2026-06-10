@@ -150,7 +150,7 @@ func (ex *extras) htmlToX(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	r.Body.Close()
+	_ = r.Body.Close()
 
 	var data ConvertParams
 	if err := json.Unmarshal(body, &data); err != nil {

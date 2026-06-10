@@ -39,7 +39,7 @@ func (mg *Mongo) ListFormSubmissions(dbName, name string) (results []map[string]
 	if err != nil {
 		return
 	}
-	defer cur.Close(mg.Ctx)
+	defer func() { _ = cur.Close(mg.Ctx) }()
 
 	for cur.Next(mg.Ctx) {
 		var result bson.M
@@ -75,7 +75,7 @@ func (mg *Mongo) GetForms(dbName string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cur.Close(mg.Ctx)
+	defer func() { _ = cur.Close(mg.Ctx) }()
 
 	var names []string
 	for cur.Next(mg.Ctx) {

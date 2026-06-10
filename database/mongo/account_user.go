@@ -153,7 +153,7 @@ func (mg *Mongo) ListAccountUsers(dbName, userID string) (results []model.Accoun
 	if err != nil {
 		return
 	}
-	defer cur.Close(mg.Ctx)
+	defer func() { _ = cur.Close(mg.Ctx) }()
 
 	for cur.Next(mg.Ctx) {
 		var lau LocalAccountUser
