@@ -145,6 +145,7 @@ func Start(c config.AppConfig, log *logger.Logger) {
 	http.Handle("/setrole", middleware.Chain(http.HandlerFunc(m.setRole), stdAuth...))
 	http.Handle("/me", middleware.Chain(http.HandlerFunc(m.me), stdAuth...))
 	http.Handle("/me/email", middleware.Chain(http.HandlerFunc(m.changeEmail), stdAuth...))
+	http.Handle("/account", middleware.Chain(http.HandlerFunc(m.deleteAccount), stdAuth...))
 
 	// oauth handlers
 	el := &ExternalLogins{log: log}

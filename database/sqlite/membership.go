@@ -21,6 +21,20 @@ func (sl *SQLite) CreateAccount(dbName, email string) (id string, err error) {
 	return
 }
 
+func (sl *SQLite) DeleteAccount(dbName, accountID string) error {
+	if _, err := sl.DB.Exec(`PRAGMA foreign_keys = ON;`); err != nil {
+		return err
+	}
+
+	qry := fmt.Sprintf(`
+		DELETE FROM %s_sb_accounts
+		WHERE id = $1;
+	`, dbName)
+
+	_, err := sl.DB.Exec(qry, accountID)
+	return err
+}
+
 func (sl *SQLite) CreateUser(dbName string, tok model.User) (id string, err error) {
 	tok.Created = time.Now()
 

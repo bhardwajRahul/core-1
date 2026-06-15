@@ -94,6 +94,8 @@ type Persister interface {
 	// membership / account & user functions
 	// CreateAccount creates an account
 	CreateAccount(dbName, email string) (id string, err error)
+	// DeleteAccount removes an account and all account-owned data
+	DeleteAccount(dbName, accountID string) error
 	// CreateUser creates a user for an account
 	CreateUser(dbName string, tok model.User) (id string, err error)
 	// SetPasswordResetCode sets the forge password code

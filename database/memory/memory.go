@@ -151,6 +151,52 @@ func all[T any](m *Memory, dbName, col string) (list []T, err error) {
 	return
 }
 
+func deleteMemoryRecord(m *Memory, dbName, col, id string) error {
+	key := fmt.Sprintf("%s_%s", dbName, col)
+
+	mx.Lock()
+	defer mx.Unlock()
+
+	repo, ok := m.DB[key]
+	if !ok {
+		return nil
+	}
+
+	delete(repo, id)
+	m.DB[key] = repo
+	return nil
+}
+
+func deleteMemoryRecordsByAccountID(m *Memory, dbName, col, accountID string) error {
+	key := fmt.Sprintf("%s_%s", dbName, col)
+
+	mx.Lock()
+	defer mx.Unlock()
+
+	repo, ok := m.DB[key]
+	if !ok {
+		return nil
+	}
+
+	for id, b := range repo {
+		var doc map[string]any
+		if err := mustDec(b, &doc); err == nil && fmt.Sprintf("%v", doc[FieldAccountID]) == accountID {
+			delete(repo, id)
+			continue
+		}
+
+		var user struct {
+			AccountID string
+		}
+		if err := mustDec(b, &user); err == nil && user.AccountID == accountID {
+			delete(repo, id)
+		}
+	}
+
+	m.DB[key] = repo
+	return nil
+}
+
 func filter[T any](list []T, fn func(x T) bool) []T {
 	var results []T
 	for _, item := range list {

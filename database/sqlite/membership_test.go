@@ -171,6 +171,93 @@ func TestChangeUserEmail(t *testing.T) {
 	}
 }
 
+func TestDeleteAccount(t *testing.T) {
+	accountID, err := datastore.CreateAccount(confDBName, "delete-account@test.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherAccountID, err := datastore.CreateAccount(confDBName, "delete-account-other@test.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	userID, err := datastore.CreateUser(confDBName, model.User{
+		AccountID: accountID,
+		Token:     "delete-account-token",
+		Email:     "delete-account@test.com",
+		Password:  "pw",
+		Role:      50,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := datastore.CreateUser(confDBName, model.User{
+		AccountID: otherAccountID,
+		Token:     "delete-account-other-token",
+		Email:     "delete-account-other@test.com",
+		Password:  "pw",
+		Role:      50,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := datastore.AddAccountUser(confDBName, model.AccountUser{
+		UserID:    userID,
+		AccountID: accountID,
+		Email:     "delete-account@test.com",
+		Token:     "delete-account-assoc-token",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := datastore.AddAccountUser(confDBName, model.AccountUser{
+		UserID:    userID,
+		AccountID: otherAccountID,
+		Email:     "delete-account@test.com",
+		Token:     "delete-account-other-assoc-token",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := datastore.AddFile(confDBName, model.File{AccountID: accountID, Key: "delete-account/file.txt"}); err != nil {
+		t.Fatal(err)
+	}
+
+	auth := model.Auth{AccountID: accountID, UserID: userID, Role: 50}
+	otherAuth := model.Auth{AccountID: otherAccountID, UserID: userID, Role: 50}
+	if _, err := datastore.CreateDocument(auth, confDBName, "delete_account_docs", map[string]interface{}{"name": "deleted"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := datastore.CreateDocument(otherAuth, confDBName, "delete_account_docs", map[string]interface{}{"name": "kept"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := datastore.DeleteAccount(confDBName, accountID); err != nil {
+		t.Fatal(err)
+	}
+
+	if users, err := datastore.ListUsers(confDBName, accountID); err != nil {
+		t.Fatal(err)
+	} else if len(users) != 0 {
+		t.Fatalf("expected deleted account users to be removed, got %d", len(users))
+	}
+	if files, err := datastore.ListAllFiles(confDBName, accountID); err != nil {
+		t.Fatal(err)
+	} else if len(files) != 0 {
+		t.Fatalf("expected deleted account files to be removed, got %d", len(files))
+	}
+	if _, err := datastore.GetAccountUser(confDBName, userID, otherAccountID); err == nil {
+		t.Fatal("expected deleted user account association to be removed")
+	}
+	if docs, err := datastore.QueryDocuments(auth, confDBName, "delete_account_docs", map[string]interface{}{}, model.ListParams{Page: 1, Size: 10}); err != nil {
+		t.Fatal(err)
+	} else if docs.Total != 0 {
+		t.Fatalf("expected deleted account docs to be removed, got %d", docs.Total)
+	}
+	if users, err := datastore.ListUsers(confDBName, otherAccountID); err != nil {
+		t.Fatal(err)
+	} else if len(users) != 1 {
+		t.Fatalf("expected other account user to remain, got %d", len(users))
+	}
+}
+
 func TestUserAddRemoveFromAccount(t *testing.T) {
 	u := model.User{
 		AccountID: adminAuth.AccountID,

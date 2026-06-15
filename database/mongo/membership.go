@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/staticbackendhq/core/model"
@@ -39,6 +40,68 @@ func (mg *Mongo) CreateAccount(dbName, email string) (id string, err error) {
 
 	id = a.ID.Hex()
 	return
+}
+
+func (mg *Mongo) DeleteAccount(dbName, accountID string) error {
+	db := mg.Client.Database(dbName)
+
+	aid, err := primitive.ObjectIDFromHex(accountID)
+	if err != nil {
+		return err
+	}
+
+	cols, err := mg.ListCollections(dbName)
+	if err != nil {
+		return err
+	}
+
+	filter := bson.M{FieldAccountID: aid}
+	var userIDs []primitive.ObjectID
+	cur, err := db.Collection("sb_tokens").Find(mg.Ctx, filter)
+	if err != nil {
+		return err
+	}
+	for cur.Next(mg.Ctx) {
+		var tok LocalToken
+		if err := cur.Decode(&tok); err != nil {
+			_ = cur.Close(mg.Ctx)
+			return err
+		}
+		userIDs = append(userIDs, tok.ID)
+	}
+	if err := cur.Err(); err != nil {
+		_ = cur.Close(mg.Ctx)
+		return err
+	}
+	if err := cur.Close(mg.Ctx); err != nil {
+		return err
+	}
+
+	for _, col := range cols {
+		if strings.HasPrefix(col, "sb_") {
+			continue
+		}
+		if _, err := db.Collection(col).DeleteMany(mg.Ctx, filter); err != nil {
+			return err
+		}
+	}
+
+	accountUserFilter := bson.M{"$or": []bson.M{{FieldAccountID: aid}}}
+	if len(userIDs) > 0 {
+		accountUserFilter["$or"] = []bson.M{{FieldAccountID: aid}, {"userId": bson.M{"$in": userIDs}}}
+	}
+	if _, err := db.Collection("sb_account_users").DeleteMany(mg.Ctx, accountUserFilter); err != nil {
+		return err
+	}
+
+	for _, col := range []string{"sb_tokens", "sb_files"} {
+		if _, err := db.Collection(col).DeleteMany(mg.Ctx, filter); err != nil {
+			return err
+		}
+	}
+
+	_, err = db.Collection("sb_accounts").DeleteOne(mg.Ctx, bson.M{FieldID: aid})
+	return err
 }
 
 func (mg *Mongo) CreateUser(dbName string, tok model.User) (id string, err error) {

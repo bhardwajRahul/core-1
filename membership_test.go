@@ -107,6 +107,44 @@ func TestChangeEmailInvalidEmail(t *testing.T) {
 	}
 }
 
+func TestDeleteAccount(t *testing.T) {
+	conf, err := backend.DB.FindDatabase(pubKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	token, user, err := backend.Membership(conf).CreateAccountAndUser("delete-account-http@test.com", userPassword, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp := authReqWithToken(t, string(token), mship.deleteAccount, "DELETE", "/account", nil)
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode > 299 {
+		t.Fatal(GetResponseBody(t, resp))
+	}
+
+	if _, err := backend.DB.GetUserByID(conf.Name, user.AccountID, user.ID); err == nil {
+		t.Fatal("expected deleted account user to be removed")
+	}
+}
+
+func TestDeleteAccountRequiresAdmin(t *testing.T) {
+	resp := authReqWithToken(t, userToken, mship.deleteAccount, "DELETE", "/account", nil)
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 got %d", resp.StatusCode)
+	}
+}
+
+func TestDeleteAccountRequiresDeleteMethod(t *testing.T) {
+	resp := dbReq(t, mship.deleteAccount, "POST", "/account", nil)
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 got %d", resp.StatusCode)
+	}
+}
+
 func TestMagicLink(t *testing.T) {
 	// note, even though the magic link route allow public (un-unthenticated) req
 	// I'm using dbReq (which enforce the stdauth) for ease of re-using the

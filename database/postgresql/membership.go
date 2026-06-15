@@ -20,6 +20,16 @@ func (pg *PostgreSQL) CreateAccount(dbName, email string) (id string, err error)
 	return
 }
 
+func (pg *PostgreSQL) DeleteAccount(dbName, accountID string) error {
+	qry := fmt.Sprintf(`
+		DELETE FROM %s.sb_accounts
+		WHERE id = $1;
+	`, dbName)
+
+	_, err := pg.DB.Exec(qry, accountID)
+	return err
+}
+
 func (pg *PostgreSQL) CreateUser(dbName string, tok model.User) (id string, err error) {
 	tok.Created = time.Now()
 

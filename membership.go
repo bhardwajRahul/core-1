@@ -365,6 +365,48 @@ func (m *membership) changeEmail(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, true)
 }
 
+func (m *membership) deleteAccount(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	conf, auth, err := middleware.Extract(r, true)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	if auth.Role < 50 {
+		http.Error(w, "insufficient priviledges", http.StatusUnauthorized)
+		return
+	}
+
+	files, err := backend.DB.ListAllFiles(conf.Name, auth.AccountID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	for _, file := range files {
+		if err := backend.Filestore.Delete(file.Key); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := backend.DB.DeleteFile(conf.Name, file.ID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := backend.DB.DeleteAccount(conf.Name, auth.AccountID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	respond(w, http.StatusOK, true)
+}
+
 func (m *membership) magicLink(w http.ResponseWriter, r *http.Request) {
 	conf, _, err := middleware.Extract(r, false)
 	if err != nil {

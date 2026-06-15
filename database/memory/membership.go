@@ -21,6 +21,68 @@ func (m *Memory) CreateAccount(dbName, email string) (id string, err error) {
 	return
 }
 
+func (m *Memory) DeleteAccount(dbName, accountID string) error {
+	cols, err := m.ListCollections(dbName)
+	if err != nil {
+		return err
+	}
+
+	userIDs, err := memoryUserIDsByAccountID(m, dbName, accountID)
+	if err != nil {
+		return err
+	}
+
+	for _, col := range cols {
+		if strings.HasPrefix(col, "sb_") {
+			continue
+		}
+		if err := deleteMemoryRecordsByAccountID(m, dbName, col, accountID); err != nil {
+			return err
+		}
+	}
+
+	for _, col := range []string{"sb_files", "sb_tokens"} {
+		if err := deleteMemoryRecordsByAccountID(m, dbName, col, accountID); err != nil {
+			return err
+		}
+	}
+	if err := deleteMemoryAccountUsers(m, dbName, accountID, userIDs); err != nil {
+		return err
+	}
+	return deleteMemoryRecord(m, dbName, "sb_accounts", accountID)
+}
+
+func memoryUserIDsByAccountID(m *Memory, dbName, accountID string) (map[string]bool, error) {
+	users, err := all[model.User](m, dbName, "sb_tokens")
+	if err != nil {
+		return nil, err
+	}
+
+	userIDs := make(map[string]bool)
+	for _, user := range users {
+		if user.AccountID == accountID {
+			userIDs[user.ID] = true
+		}
+	}
+	return userIDs, nil
+}
+
+func deleteMemoryAccountUsers(m *Memory, dbName, accountID string, userIDs map[string]bool) error {
+	accountUsers, err := all[model.AccountUser](m, dbName, "sb_account_users")
+	if err != nil {
+		return err
+	}
+
+	for _, au := range accountUsers {
+		if au.AccountID == accountID || userIDs[au.UserID] {
+			if err := deleteMemoryRecord(m, dbName, "sb_account_users", au.ID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (m *Memory) CreateUser(dbName string, tok model.User) (id string, err error) {
 	tok.Created = time.Now()
 

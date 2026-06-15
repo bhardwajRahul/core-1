@@ -23,6 +23,13 @@ type SQLite struct {
 }
 
 func New(db *sql.DB, pubdoc cache.PublishDocumentEvent, log *logger.Logger) database.Persister {
+	if _, err := db.Exec(`PRAGMA foreign_keys = ON;`); err != nil {
+		fmt.Println("=== SQLITE PRAGMA FAILED ===")
+		fmt.Println(err)
+		fmt.Println("=== /SQLITE PRAGMA FAILED ===")
+		os.Exit(1)
+	}
+
 	// run migrations
 	if err := migrate(db); err != nil {
 		fmt.Println("=== MIGRATION FAILED ===")
