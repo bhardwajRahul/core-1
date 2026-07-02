@@ -535,6 +535,11 @@ func (a *accounts) deleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if auth.Role < 50 {
+		http.Error(w, "insufficient priviledges", http.StatusUnauthorized)
+		return
+	}
+
 	if auth.Role < u.Role {
 		http.Error(w, "permission level not high enough", http.StatusUnauthorized)
 		return

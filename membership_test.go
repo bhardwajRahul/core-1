@@ -33,6 +33,47 @@ func TestGetCurrentAuthUser(t *testing.T) {
 	}
 }
 
+func TestSetRoleAllowsRole50ToGrantRole50(t *testing.T) {
+	conf, err := backend.DB.FindDatabase(pubKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	adminToken, admin, err := backend.Membership(conf).CreateUser(testAccountID, "set-role-admin-50@test.com", userPassword, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = backend.DB.RemoveUser(model.Auth{AccountID: testAccountID, UserID: admin.ID, Role: 100}, dbName, admin.ID)
+	})
+
+	_, user, err := backend.Membership(conf).CreateUser(testAccountID, "set-role-target-50@test.com", userPassword, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = backend.DB.RemoveUser(model.Auth{AccountID: testAccountID, UserID: user.ID, Role: 100}, dbName, user.ID)
+	})
+
+	resp := authReqWithToken(t, string(adminToken), mship.setRole, "POST", "/setrole", map[string]interface{}{
+		"accountId": testAccountID,
+		"email":     user.Email,
+		"role":      50,
+	})
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode > 299 {
+		t.Fatal(GetResponseBody(t, resp))
+	}
+
+	updated, err := backend.DB.GetUserByID(dbName, testAccountID, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Role != 50 {
+		t.Fatalf("expected role 50 got %d", updated.Role)
+	}
+}
+
 func TestChangeEmail(t *testing.T) {
 	conf, err := backend.DB.FindDatabase(pubKey)
 	if err != nil {

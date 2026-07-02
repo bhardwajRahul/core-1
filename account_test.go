@@ -68,6 +68,65 @@ func TestUserAddRemoveFromAccount(t *testing.T) {
 	}
 }
 
+func TestDeleteUserAllowsEqualRole50(t *testing.T) {
+	conf, err := backend.DB.FindDatabase(pubKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	adminToken, admin, err := backend.Membership(conf).CreateUser(testAccountID, "delete-admin-50@test.com", userPassword, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = backend.DB.RemoveUser(model.Auth{AccountID: testAccountID, UserID: admin.ID, Role: 100}, dbName, admin.ID)
+	})
+
+	_, target, err := backend.Membership(conf).CreateUser(testAccountID, "delete-target-50@test.com", userPassword, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp := authReqWithToken(t, string(adminToken), acct.deleteUser, "DELETE", "/account/users/"+target.ID, nil)
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode > 299 {
+		t.Fatal(GetResponseBody(t, resp))
+	}
+
+	if _, err := backend.DB.GetUserByID(dbName, testAccountID, target.ID); err == nil {
+		t.Fatal("expected role 50 target user to be deleted")
+	}
+}
+
+func TestDeleteUserRequiresRole50(t *testing.T) {
+	conf, err := backend.DB.FindDatabase(pubKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	roleZeroToken, roleZeroUser, err := backend.Membership(conf).CreateUser(testAccountID, "delete-role-0@test.com", userPassword, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = backend.DB.RemoveUser(model.Auth{AccountID: testAccountID, UserID: roleZeroUser.ID, Role: 100}, dbName, roleZeroUser.ID)
+	})
+
+	_, target, err := backend.Membership(conf).CreateUser(testAccountID, "delete-target-role-0@test.com", userPassword, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = backend.DB.RemoveUser(model.Auth{AccountID: testAccountID, UserID: target.ID, Role: 100}, dbName, target.ID)
+	})
+
+	resp := authReqWithToken(t, string(roleZeroToken), acct.deleteUser, "DELETE", "/account/users/"+target.ID, nil)
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected status %d got %d: %s", http.StatusUnauthorized, resp.StatusCode, GetResponseBody(t, resp))
+	}
+}
+
 func TestListUsersByRole(t *testing.T) {
 	roleEmail := "role-filter-user@test.com"
 	_, roleUser, err := backend.Membership(model.DatabaseConfig{Name: dbName}).CreateUser(testAccountID, roleEmail, userPassword, 50)
