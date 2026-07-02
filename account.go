@@ -496,6 +496,7 @@ func (a *accounts) addUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var users []model.User
+	var listErr error
 	if roles, ok := r.URL.Query()["role"]; ok {
 		role, err := strconv.Atoi(roles[0])
 		if err != nil {
@@ -503,12 +504,12 @@ func (a *accounts) addUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		users, err = backend.DB.ListUsers(conf.Name, auth.AccountID, role)
+		users, listErr = backend.DB.ListUsers(conf.Name, auth.AccountID, role)
 	} else {
-		users, err = backend.DB.ListUsers(conf.Name, auth.AccountID)
+		users, listErr = backend.DB.ListUsers(conf.Name, auth.AccountID)
 	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if listErr != nil {
+		http.Error(w, listErr.Error(), http.StatusInternalServerError)
 		return
 	}
 
