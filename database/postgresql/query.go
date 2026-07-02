@@ -116,14 +116,10 @@ func escapeLikePattern(s string) string {
 }
 
 func secureRead(auth model.Auth, col string) string {
-	if strings.HasPrefix(col, "pub_") || auth.Role == 100 {
-		return "WHERE $1=$1 AND $2=$2 "
-	}
-
-	switch internal.ReadPermission(col) {
-	case internal.PermGroup:
+	switch internal.ReadScope(auth, col) {
+	case internal.RowScopeAccount:
 		return "WHERE account_id = $1 AND $2=$2 "
-	case internal.PermOwner:
+	case internal.RowScopeOwner:
 		return "WHERE account_id = $1 AND owner_id = $2 "
 	default:
 		//for read permission to everyone i.e. col-name_774_
@@ -132,14 +128,10 @@ func secureRead(auth model.Auth, col string) string {
 }
 
 func secureWrite(auth model.Auth, col string) string {
-	if strings.HasPrefix(col, "pub_") || auth.Role == 100 {
-		return "WHERE $1=$1 AND $2=$2 "
-	}
-
-	switch internal.WritePermission(col) {
-	case internal.PermGroup:
+	switch internal.WriteScope(auth, col, true) {
+	case internal.RowScopeAccount:
 		return "WHERE account_id = $1 AND $2=$2 "
-	case internal.PermOwner:
+	case internal.RowScopeOwner:
 		return "WHERE account_id = $1 AND owner_id = $2 "
 	default:
 		//for write permission to everyone i.e. col-name_776_

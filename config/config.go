@@ -88,6 +88,8 @@ type AppConfig struct {
 
 	// KeepPermissionInName if "yes" will keep the repo permission in repo name
 	KeepPermissionInName bool
+	// RoleAwareRowPermissions enables account role checks in row permissions.
+	RoleAwareRowPermissions bool
 
 	// LogConsoleLevel could be use to specify the minimum log level is wanted
 	LogConsoleLevel string
@@ -143,6 +145,7 @@ func LoadConfig() AppConfig {
 		S3Bucket:                 os.Getenv("S3_BUCKET"),
 		S3CDNURL:                 os.Getenv("S3_CDN_URL"),
 		KeepPermissionInName:     os.Getenv("KEEP_PERM_COL_NAME") == "",
+		RoleAwareRowPermissions:  os.Getenv("ROLE_AWARE_ROW_PERMISSIONS") == "true",
 		LogConsoleLevel:          os.Getenv("LOG_CONSOLE_LEVEL"),
 		LogFilename:              os.Getenv("LOG_FILENAME"),
 		FullTextIndexFile:        os.Getenv("FTS_INDEX_FILE"),

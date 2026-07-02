@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/staticbackendhq/core/config"
 	"github.com/staticbackendhq/core/model"
 )
 
@@ -167,6 +168,58 @@ func TestListDocuments(t *testing.T) {
 	if !found {
 		t.Errorf("expected to find inserted task in list")
 	}
+}
+
+func TestRoleAwareRowPermissions(t *testing.T) {
+	withRoleAwareRowPermissions(t)
+
+	col := "role_aware_tasks"
+	ownerAuth := model.Auth{AccountID: adminAuth.AccountID, UserID: "role-aware-owner", Role: 10}
+	roleZeroAuth := model.Auth{AccountID: adminAuth.AccountID, UserID: "role-aware-other", Role: 0}
+	adminAccountAuth := model.Auth{AccountID: adminAuth.AccountID, UserID: "role-aware-admin", Role: 50}
+	otherAccountAuth := model.Auth{AccountID: "role-aware-other-account", UserID: "role-aware-admin", Role: 50}
+
+	inserted, err := datastore.CreateDocument(ownerAuth, confDBName, col, newTask("role aware default", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := inserted["id"].(string)
+
+	if _, err := datastore.GetDocumentByID(roleZeroAuth, confDBName, col, id); err == nil {
+		t.Fatalf("expected role 0 same-account user to be denied default row read")
+	}
+
+	restricted, err := datastore.CreateDocument(ownerAuth, confDBName, col+"_700_", newTask("role aware restricted", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	restrictedID := restricted["id"].(string)
+
+	if _, err := datastore.GetDocumentByID(adminAccountAuth, confDBName, col+"_700_", restrictedID); err != nil {
+		t.Fatalf("expected role 50 same-account admin to read _700_ row: %v", err)
+	}
+
+	updated, err := datastore.UpdateDocument(adminAccountAuth, confDBName, col+"_700_", restrictedID, map[string]any{"title": "updated by admin"})
+	if err != nil {
+		t.Fatalf("expected role 50 same-account admin to update _700_ row: %v", err)
+	}
+	if updated["title"] != "updated by admin" {
+		t.Fatalf("expected title to be updated got %v", updated["title"])
+	}
+
+	if _, err := datastore.GetDocumentByID(otherAccountAuth, confDBName, col+"_700_", restrictedID); err == nil {
+		t.Fatalf("expected role 50 different-account admin to be denied")
+	}
+}
+
+func withRoleAwareRowPermissions(t *testing.T) {
+	t.Helper()
+
+	orig := config.Current.RoleAwareRowPermissions
+	config.Current.RoleAwareRowPermissions = true
+	t.Cleanup(func() {
+		config.Current.RoleAwareRowPermissions = orig
+	})
 }
 
 func TestListDocumentsSortsByCreatedAscendingByDefault(t *testing.T) {

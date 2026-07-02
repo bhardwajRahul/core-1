@@ -1,8 +1,6 @@
 package memory
 
 import (
-	"strings"
-
 	"github.com/staticbackendhq/core/internal"
 	sbquery "github.com/staticbackendhq/core/internal/query"
 	"github.com/staticbackendhq/core/model"
@@ -22,15 +20,12 @@ func secureRead(auth model.Auth, col string, list []map[string]any) []map[string
 
 	filter := make(map[string]string)
 
-	// if they're not root and repo is not public
-	if !strings.HasPrefix(col, "pub_") && auth.Role < 100 {
-		switch internal.ReadPermission(col) {
-		case internal.PermGroup:
-			filter[FieldAccountID] = auth.AccountID
-		case internal.PermOwner:
-			filter[FieldAccountID] = auth.AccountID
-			filter[FieldOwnerID] = auth.UserID
-		}
+	switch internal.ReadScope(auth, col) {
+	case internal.RowScopeAccount:
+		filter[FieldAccountID] = auth.AccountID
+	case internal.RowScopeOwner:
+		filter[FieldAccountID] = auth.AccountID
+		filter[FieldOwnerID] = auth.UserID
 	}
 
 	for _, doc := range list {
@@ -51,14 +46,11 @@ func secureRead(auth model.Auth, col string, list []map[string]any) []map[string
 }
 
 func canWrite(auth model.Auth, col string, doc map[string]any) bool {
-	// if they are not "root", we use permission
-	if auth.Role < 100 {
-		switch internal.WritePermission(col) {
-		case internal.PermGroup:
-			return doc[FieldAccountID] == auth.AccountID
-		case internal.PermOwner:
-			return doc[FieldAccountID] == auth.AccountID && doc[FieldOwnerID] == auth.UserID
-		}
+	switch internal.WriteScope(auth, col, false) {
+	case internal.RowScopeAccount:
+		return doc[FieldAccountID] == auth.AccountID
+	case internal.RowScopeOwner:
+		return doc[FieldAccountID] == auth.AccountID && doc[FieldOwnerID] == auth.UserID
 	}
 
 	return true

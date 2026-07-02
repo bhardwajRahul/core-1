@@ -3,10 +3,10 @@ package mongo
 import (
 	"fmt"
 	"regexp"
-	"strings"
 
 	"github.com/staticbackendhq/core/internal"
 	sbquery "github.com/staticbackendhq/core/internal/query"
+	"github.com/staticbackendhq/core/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -88,27 +88,21 @@ func exprFilter(exprs []bson.M) bson.A {
 }
 
 func secureRead(acctID, userID primitive.ObjectID, role int, col string, filter bson.M) {
-	// if they're not root and repo is not public
-	if !strings.HasPrefix(col, "pub_") && role < 100 {
-		switch internal.ReadPermission(col) {
-		case internal.PermGroup:
-			filter[FieldAccountID] = acctID
-		case internal.PermOwner:
-			filter[FieldAccountID] = acctID
-			filter[FieldOwnerID] = userID
-		}
+	switch internal.ReadScope(model.Auth{Role: role}, col) {
+	case internal.RowScopeAccount:
+		filter[FieldAccountID] = acctID
+	case internal.RowScopeOwner:
+		filter[FieldAccountID] = acctID
+		filter[FieldOwnerID] = userID
 	}
 }
 
 func secureWrite(acctID, userID primitive.ObjectID, role int, col string, filter bson.M) {
-	// if they are not "root", we use permission
-	if role < 100 {
-		switch internal.WritePermission(col) {
-		case internal.PermGroup:
-			filter[FieldAccountID] = acctID
-		case internal.PermOwner:
-			filter[FieldAccountID] = acctID
-			filter[FieldOwnerID] = userID
-		}
+	switch internal.WriteScope(model.Auth{Role: role}, col, false) {
+	case internal.RowScopeAccount:
+		filter[FieldAccountID] = acctID
+	case internal.RowScopeOwner:
+		filter[FieldAccountID] = acctID
+		filter[FieldOwnerID] = userID
 	}
 }

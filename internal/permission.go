@@ -5,6 +5,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/staticbackendhq/core/config"
+	"github.com/staticbackendhq/core/model"
 )
 
 type PermissionLevel int
@@ -13,6 +16,14 @@ const (
 	PermOwner PermissionLevel = iota
 	PermGroup
 	PermEveryone
+)
+
+type RowPermissionScope int
+
+const (
+	RowScopeOwner RowPermissionScope = iota
+	RowScopeAccount
+	RowScopeEveryone
 )
 
 func GetPermission(col string) (owner string, group string, everyone string) {
@@ -63,6 +74,51 @@ func ReadPermission(col string) PermissionLevel {
 		return PermGroup
 	}
 	return PermOwner
+}
+
+func ReadScope(auth model.Auth, col string) RowPermissionScope {
+	if strings.HasPrefix(col, "pub_") || auth.Role == 100 {
+		return RowScopeEveryone
+	}
+
+	if config.Current.RoleAwareRowPermissions {
+		if auth.Role >= 50 {
+			return RowScopeAccount
+		}
+		if auth.Role == 0 {
+			return RowScopeOwner
+		}
+	}
+
+	return scopeFromPermission(ReadPermission(col))
+}
+
+func WriteScope(auth model.Auth, col string, publicWrite bool) RowPermissionScope {
+	if auth.Role == 100 || (publicWrite && strings.HasPrefix(col, "pub_")) {
+		return RowScopeEveryone
+	}
+
+	if config.Current.RoleAwareRowPermissions && !strings.HasPrefix(col, "pub_") {
+		if auth.Role >= 50 {
+			return RowScopeAccount
+		}
+		if auth.Role == 0 {
+			return RowScopeOwner
+		}
+	}
+
+	return scopeFromPermission(WritePermission(col))
+}
+
+func scopeFromPermission(perm PermissionLevel) RowPermissionScope {
+	switch perm {
+	case PermGroup:
+		return RowScopeAccount
+	case PermEveryone:
+		return RowScopeEveryone
+	default:
+		return RowScopeOwner
+	}
 }
 
 func CanWrite(s string) bool {
