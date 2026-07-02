@@ -37,6 +37,11 @@ func (mg *Mongo) Ping() error {
 	return mg.Client.Ping(ctx, readpref.Primary())
 }
 
+// Close disconnects the MongoDB client.
+func (mg *Mongo) Close(ctx context.Context) error {
+	return mg.Client.Disconnect(ctx)
+}
+
 func (mg *Mongo) CreateIndex(dbName, col, field string) error {
 	db := mg.Client.Database(dbName)
 

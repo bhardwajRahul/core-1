@@ -55,6 +55,11 @@ func NewCache(log *logger.Logger) *Cache {
 	}
 }
 
+// Close closes the Redis client.
+func (c *Cache) Close() error {
+	return c.Rdb.Close()
+}
+
 // Get gets a value by its id
 func (c *Cache) Get(key string) (string, error) {
 	return c.Rdb.Get(c.Ctx, key).Result()

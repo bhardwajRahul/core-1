@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/staticbackendhq/core/cache"
@@ -38,6 +39,10 @@ type Broker struct {
 	pubsub cache.Volatilizer
 
 	log *logger.Logger
+
+	shutdown chan struct{}
+	done     chan struct{}
+	once     sync.Once
 }
 
 // NewBroker returns a ready to use Broker for accepting web socket connections
@@ -53,6 +58,8 @@ func NewBroker(v Validator, pubsub cache.Volatilizer, log *logger.Logger) *Broke
 		validateAuth:       v,
 		pubsub:             pubsub,
 		log:                log,
+		shutdown:           make(chan struct{}),
+		done:               make(chan struct{}),
 	}
 
 	go b.start()
@@ -61,6 +68,8 @@ func NewBroker(v Validator, pubsub cache.Volatilizer, log *logger.Logger) *Broke
 }
 
 func (b *Broker) start() {
+	defer close(b.done)
+
 	for {
 		select {
 		case data := <-b.newConnections:
@@ -86,7 +95,31 @@ func (b *Broker) start() {
 			for _, c := range clients {
 				c <- payload
 			}
+		case <-b.shutdown:
+			b.closeClients()
+			return
 		}
+	}
+}
+
+// Close stops the broker loop and closes active SSE connections.
+func (b *Broker) Close(ctx context.Context) error {
+	b.once.Do(func() {
+		close(b.shutdown)
+	})
+
+	select {
+	case <-b.done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (b *Broker) closeClients() {
+	for c := range b.clients {
+		b.unsub(c)
+		close(c)
 	}
 }
 
@@ -130,12 +163,21 @@ func (b *Broker) Accept(w http.ResponseWriter, r *http.Request) {
 		ctx:      r.Context(),
 		messages: messages,
 	}
-	b.newConnections <- data
+	select {
+	case b.newConnections <- data:
+	case <-b.done:
+		return
+	case <-r.Context().Done():
+		return
+	}
 
 	// make sure we'r removing this connection
 	// when the handler completes.
 	defer func() {
-		b.closingConnections <- messages
+		select {
+		case b.closingConnections <- messages:
+		case <-b.done:
+		}
 	}()
 
 	// handles the client-side disconnection
@@ -144,7 +186,10 @@ func (b *Broker) Accept(w http.ResponseWriter, r *http.Request) {
 	// broadcast messages
 	for {
 		select {
-		case msg := <-messages:
+		case msg, ok := <-messages:
+			if !ok {
+				return
+			}
 			// write Server Sent Event data
 			bytes, err := json.Marshal(msg)
 			if err != nil {
@@ -161,7 +206,10 @@ func (b *Broker) Accept(w http.ResponseWriter, r *http.Request) {
 			// flush immediately.
 			flusher.Flush()
 		case <-ctx.Done():
-			b.closingConnections <- messages
+			select {
+			case b.closingConnections <- messages:
+			case <-b.done:
+			}
 			return
 		}
 	}

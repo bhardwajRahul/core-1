@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/staticbackendhq/core/backend"
 	"github.com/staticbackendhq/core/config"
@@ -279,16 +280,8 @@ func Start(c config.AppConfig, log *logger.Logger) {
 	http.HandleFunc("/", webUI.login)
 
 	// graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// handle stop/kill signal
-	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-
-		<-c
-		cancel()
-	}()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	httpsvr := &http.Server{
 		Addr: ":" + c.Port,
@@ -296,14 +289,29 @@ func Start(c config.AppConfig, log *logger.Logger) {
 
 	g, gCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		return httpsvr.ListenAndServe()
+		if err := httpsvr.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
 	})
 	g.Go(func() error {
 		<-gCtx.Done()
-		if !c.NoFullTextSearch {
-			backend.Search.Close()
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		var errs []error
+		if err := httpsvr.Shutdown(shutdownCtx); err != nil {
+			errs = append(errs, err)
 		}
-		return httpsvr.Shutdown(context.Background())
+		if err := b.Close(shutdownCtx); err != nil {
+			errs = append(errs, err)
+		}
+		if err := backend.Close(shutdownCtx); err != nil {
+			errs = append(errs, err)
+		}
+
+		return errors.Join(errs...)
 	})
 
 	if err := g.Wait(); err != nil {

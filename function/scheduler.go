@@ -1,12 +1,14 @@
 package function
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/staticbackendhq/core/cache"
@@ -27,6 +29,12 @@ type TaskScheduler struct {
 	Log       *logger.Logger
 
 	Scheduler gocron.Scheduler
+
+	mu      sync.Mutex
+	stop    chan struct{}
+	done    chan struct{}
+	running bool
+	stopped bool
 }
 
 type taskAuthCache struct {
@@ -48,6 +56,20 @@ func (t taskAuthCache) auth() model.Auth {
 }
 
 func (ts *TaskScheduler) Start() {
+	ts.ensureLifecycle()
+	ts.mu.Lock()
+	ts.running = true
+	done := ts.done
+	stop := ts.stop
+	ts.mu.Unlock()
+
+	defer func() {
+		ts.mu.Lock()
+		ts.running = false
+		ts.mu.Unlock()
+		close(done)
+	}()
+
 	tasks, err := ts.DataStore.ListTasks()
 	if err != nil {
 		ts.Log.Error().Err(err).Msg("error loading tasks")
@@ -63,7 +85,39 @@ func (ts *TaskScheduler) Start() {
 	}
 
 	ts.Scheduler.Start()
-	select {}
+	<-stop
+}
+
+// Stop stops the task scheduler and waits for Start to return.
+func (ts *TaskScheduler) Stop(ctx context.Context) error {
+	ts.ensureLifecycle()
+
+	ts.mu.Lock()
+	if !ts.stopped {
+		close(ts.stop)
+		ts.stopped = true
+	}
+	done := ts.done
+	running := ts.running
+	scheduler := ts.Scheduler
+	ts.mu.Unlock()
+
+	if scheduler != nil {
+		if err := scheduler.Shutdown(); err != nil {
+			return err
+		}
+	}
+
+	if !running {
+		return nil
+	}
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (ts *TaskScheduler) AddOnTheFly(task model.Task) {
@@ -109,6 +163,18 @@ func (ts *TaskScheduler) ensureScheduler() {
 	}
 
 	ts.Scheduler = scheduler
+}
+
+func (ts *TaskScheduler) ensureLifecycle() {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	if ts.stop == nil {
+		ts.stop = make(chan struct{})
+	}
+	if ts.done == nil {
+		ts.done = make(chan struct{})
+	}
 }
 
 func (ts *TaskScheduler) run(task model.Task) {

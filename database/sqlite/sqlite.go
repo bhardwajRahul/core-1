@@ -50,6 +50,11 @@ func (sl *SQLite) Ping() error {
 	return sl.DB.Ping()
 }
 
+// Close closes the underlying database connection pool.
+func (sl *SQLite) Close() error {
+	return sl.DB.Close()
+}
+
 func (sl *SQLite) CreateIndex(dbName, col, field string) error {
 	// TODO: this does not seems it's possible to create an index on a JSON field
 	/*

@@ -40,6 +40,11 @@ func (pg *PostgreSQL) Ping() error {
 	return pg.DB.Ping()
 }
 
+// Close closes the underlying database connection pool.
+func (pg *PostgreSQL) Close() error {
+	return pg.DB.Close()
+}
+
 func (pg *PostgreSQL) CreateIndex(dbName, col, field string) error {
 	return pg.createIndex(dbName, col, field, sbquery.TypeDefault)
 }

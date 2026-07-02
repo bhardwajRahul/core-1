@@ -116,9 +116,11 @@ package backend
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/staticbackendhq/core/cache"
@@ -169,11 +171,18 @@ var (
 
 	// Scheduler to execute schedule jobs (only on PrimaryInstance)
 	Scheduler *function.TaskScheduler
+
+	lifecycleMu      sync.Mutex
+	closeOnce        sync.Once
+	closeErr         error
+	subscriberCancel context.CancelFunc
+	subscriberDone   chan struct{}
 )
 
 // Setup initializes the core services based on the configuration received.
 func Setup(cfg config.AppConfig) {
 	Config = cfg
+	resetLifecycle()
 
 	Log = logger.Get(cfg)
 
@@ -267,7 +276,16 @@ func Setup(cfg config.AppConfig) {
 	sub.IsPrimaryInstance = isPrimary
 
 	// start system events subscriber
-	go sub.Start()
+	subCtx, cancel := context.WithCancel(context.Background())
+	lifecycleMu.Lock()
+	subscriberCancel = cancel
+	subscriberDone = make(chan struct{})
+	done := subscriberDone
+	lifecycleMu.Unlock()
+	go func() {
+		defer close(done)
+		sub.StartContext(subCtx)
+	}()
 
 	// for primary instance, we start the job scheduler
 	if isPrimary {
@@ -286,6 +304,74 @@ func Setup(cfg config.AppConfig) {
 
 	Membership = newUser
 	Storage = newFile
+}
+
+// Close gracefully stops services started by Setup.
+func Close(ctx context.Context) error {
+	closeOnce.Do(func() {
+		closeErr = closeServices(ctx)
+	})
+
+	return closeErr
+}
+
+func resetLifecycle() {
+	lifecycleMu.Lock()
+	defer lifecycleMu.Unlock()
+
+	closeOnce = sync.Once{}
+	closeErr = nil
+	subscriberCancel = nil
+	subscriberDone = nil
+}
+
+func closeServices(ctx context.Context) error {
+	var errs []error
+
+	if Scheduler != nil {
+		if err := Scheduler.Stop(ctx); err != nil {
+			errs = append(errs, err)
+		}
+		Scheduler = nil
+	}
+
+	lifecycleMu.Lock()
+	cancel := subscriberCancel
+	done := subscriberDone
+	lifecycleMu.Unlock()
+	if cancel != nil {
+		cancel()
+		select {
+		case <-done:
+		case <-ctx.Done():
+			errs = append(errs, ctx.Err())
+		}
+	}
+
+	if Search != nil {
+		Search.Close()
+		Search = nil
+	}
+
+	if err := closeResource(ctx, DB); err != nil {
+		errs = append(errs, err)
+	}
+	if err := closeResource(ctx, Cache); err != nil {
+		errs = append(errs, err)
+	}
+
+	return errors.Join(errs...)
+}
+
+func closeResource(ctx context.Context, resource any) error {
+	switch closer := resource.(type) {
+	case interface{ Close(context.Context) error }:
+		return closer.Close(ctx)
+	case interface{ Close() error }:
+		return closer.Close()
+	default:
+		return nil
+	}
 }
 
 func openMongoDatabase(dbHost string) (*mongodrv.Client, error) {

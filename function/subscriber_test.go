@@ -1,7 +1,9 @@
 package function
 
 import (
+	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -45,6 +47,7 @@ func TestSubscriberDBTriggerRecordsHistoryAndLastRun(t *testing.T) {
 		},
 	}
 
+	var wg sync.WaitGroup
 	sub.handleRealtimeEvents(model.Command{
 		Channel: "db-contacts",
 		Type:    model.MsgTypeDBCreated,
@@ -56,7 +59,8 @@ func TestSubscriberDBTriggerRecordsHistoryAndLastRun(t *testing.T) {
 			Role:      100,
 			Token:     "token-1",
 		},
-	})
+	}, &wg)
+	wg.Wait()
 
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
@@ -157,6 +161,7 @@ func TestSubscriberTelemetryTriggerRecordsHistory(t *testing.T) {
 		},
 	}
 
+	var wg sync.WaitGroup
 	sub.handleRealtimeEvents(model.Command{
 		Channel: model.TelemetryLongRequestChannel,
 		Type:    model.MsgTypeTelemetryLongRequest,
@@ -168,7 +173,8 @@ func TestSubscriberTelemetryTriggerRecordsHistory(t *testing.T) {
 			Role:      100,
 			Token:     "token-1",
 		},
-	})
+	}, &wg)
+	wg.Wait()
 
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
@@ -191,4 +197,32 @@ func TestSubscriberTelemetryTriggerRecordsHistory(t *testing.T) {
 	}
 
 	t.Fatal("timed out waiting for telemetry function execution history")
+}
+
+func TestSubscriberStartContextStopsOnCancel(t *testing.T) {
+	log := logger.Get(config.LoadConfig())
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+
+	sub := &Subscriber{
+		PubSub: cache.NewDevCache(log),
+		Log:    log,
+		GetExecEnv: func(msg model.Command) (*ExecutionEnvironment, error) {
+			t.Fatal("unexpected message processing")
+			return nil, nil
+		},
+	}
+
+	go func() {
+		defer close(done)
+		sub.StartContext(ctx)
+	}()
+
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for subscriber shutdown")
+	}
 }

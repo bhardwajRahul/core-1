@@ -1,6 +1,7 @@
 package function
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -195,6 +196,45 @@ func TestTaskSchedulerAddAndCancelOnTheFly(t *testing.T) {
 	}
 	if got := len(ts.Scheduler.Jobs()); got != 0 {
 		t.Fatalf("expected no scheduled jobs after cancel, got %d", got)
+	}
+}
+
+func TestTaskSchedulerStopUnblocksStart(t *testing.T) {
+	baseName := fmt.Sprintf("sched_stop_%d", time.Now().UnixNano())
+	ds, _ := newSchedulerTestStore(t, baseName)
+	ts := &TaskScheduler{
+		Volatile:  cache.NewDevCache(logger.Get(config.LoadConfig())),
+		DataStore: ds,
+		Log:       logger.Get(config.LoadConfig()),
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ts.Start()
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if ts.Scheduler != nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if ts.Scheduler == nil {
+		t.Fatal("expected scheduler to start")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := ts.Stop(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for scheduler shutdown")
 	}
 }
 

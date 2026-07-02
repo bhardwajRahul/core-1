@@ -1,6 +1,7 @@
 package function
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -23,10 +24,16 @@ type Subscriber struct {
 // This channel is responsible of executing functions that match the
 // topic/trigger
 func (sub *Subscriber) Start() {
-	receiver := make(chan model.Command)
-	close := make(chan bool)
+	sub.StartContext(context.Background())
+}
 
-	go sub.PubSub.Subscribe(receiver, "", "sbsys", close)
+// StartContext starts the system event subscription until ctx is canceled.
+func (sub *Subscriber) StartContext(ctx context.Context) {
+	receiver := make(chan model.Command)
+	closeSub := make(chan bool)
+	var wg sync.WaitGroup
+
+	go sub.PubSub.Subscribe(receiver, "", "sbsys", closeSub)
 
 	for {
 		select {
@@ -34,22 +41,33 @@ func (sub *Subscriber) Start() {
 			// only handle function execution on the primary instance
 			// otherwise it would cause duplication work.
 			if sub.IsPrimaryInstance {
-				go sub.process(msg)
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					sub.process(msg)
+				}()
 			}
-		case <-close:
+		case <-closeSub:
 			sub.Log.Info().Msg("system event channel closed?!?")
+		case <-ctx.Done():
+			close(closeSub)
+			wg.Wait()
+			return
 		}
 	}
 }
 
 func (sub *Subscriber) process(msg model.Command) {
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
 	switch msg.Type {
 	case model.MsgTypeChanOut,
 		model.MsgTypeDBCreated,
 		model.MsgTypeDBUpdated,
 		model.MsgTypeDBDeleted,
 		model.MsgTypeTelemetryLongRequest:
-		sub.handleRealtimeEvents(msg)
+		sub.handleRealtimeEvents(msg, &wg)
 	default:
 		// for user triggered events, we enforce a max of 5 msg / 60 secs
 		v, ok := sub.relax.Load(msg.Auth.UserID)
@@ -76,11 +94,11 @@ func (sub *Subscriber) process(msg model.Command) {
 		n += 1
 		sub.relax.Store(msg.Auth.UserID, n)
 
-		sub.handleRealtimeEvents(msg)
+		sub.handleRealtimeEvents(msg, &wg)
 	}
 }
 
-func (sub *Subscriber) handleRealtimeEvents(msg model.Command) {
+func (sub *Subscriber) handleRealtimeEvents(msg model.Command, wg *sync.WaitGroup) {
 	exe, err := sub.GetExecEnv(msg)
 	if err != nil {
 		sub.Log.Error().Err(err).Msgf("cannot retrieve base from token: %s", msg.Token)
@@ -131,7 +149,9 @@ func (sub *Subscriber) handleRealtimeEvents(msg model.Command) {
 		}
 
 		exe.Data = fn
+		wg.Add(1)
 		go func(ex *ExecutionEnvironment) {
+			defer wg.Done()
 			if err := ex.Execute(msg); err != nil {
 				sub.Log.Error().Err(err).Msgf(`executing "%s" function failed"`, ex.Data.FunctionName)
 			}
