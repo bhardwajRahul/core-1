@@ -88,8 +88,8 @@ type Persister interface {
 	GetFirstUserFromAccountID(dbName, accountID string) (model.User, error)
 	// ListAccounts returns a list of all account for this database
 	ListAccounts(dbname string) ([]model.Account, error)
-	// ListUsers returns the list of users for an account
-	ListUsers(dbname, accountID string) ([]model.User, error)
+	// ListUsers returns the list of users for an account, optionally filtered by role
+	ListUsers(dbname, accountID string, role ...int) ([]model.User, error)
 
 	// membership / account & user functions
 	// CreateAccount creates an account

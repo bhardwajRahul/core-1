@@ -74,14 +74,20 @@ func (sl *SQLite) ListAccounts(dbName string) ([]model.Account, error) {
 	return list, nil
 }
 
-func (sl *SQLite) ListUsers(dbName, accountID string) ([]model.User, error) {
+func (sl *SQLite) ListUsers(dbName, accountID string, role ...int) ([]model.User, error) {
 	qry := fmt.Sprintf(`
 	SELECT * 
 	FROM %s_sb_tokens
 	WHERE account_id = $1
 	`, dbName)
 
-	rows, err := sl.DB.Query(qry, accountID)
+	args := []any{accountID}
+	if len(role) > 0 {
+		qry += " AND role = $2"
+		args = append(args, role[0])
+	}
+
+	rows, err := sl.DB.Query(qry, args...)
 	if err != nil {
 		return nil, err
 	}

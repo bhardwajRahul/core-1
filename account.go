@@ -3,6 +3,7 @@ package staticbackend
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -494,7 +495,18 @@ func (a *accounts) addUser(w http.ResponseWriter, r *http.Request) {
 		respond(w, http.StatusOK, newUser)
 		return
 	}
-	users, err := backend.DB.ListUsers(conf.Name, auth.AccountID)
+	var users []model.User
+	if roles, ok := r.URL.Query()["role"]; ok {
+		role, err := strconv.Atoi(roles[0])
+		if err != nil {
+			http.Error(w, "invalid role", http.StatusBadRequest)
+			return
+		}
+
+		users, err = backend.DB.ListUsers(conf.Name, auth.AccountID, role)
+	} else {
+		users, err = backend.DB.ListUsers(conf.Name, auth.AccountID)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

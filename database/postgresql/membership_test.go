@@ -223,3 +223,46 @@ func TestUserAddRemoveFromAccount(t *testing.T) {
 		t.Error("new user is still in account users?")
 	}
 }
+
+func TestListUsersByRole(t *testing.T) {
+	roleZero := model.User{
+		AccountID: adminAuth.AccountID,
+		Email:     "role-filter-zero@test.com",
+		Password:  "role-filter-zero",
+		Role:      0,
+		Token:     "role-filter-zero-token",
+	}
+	roleFifty := model.User{
+		AccountID: adminAuth.AccountID,
+		Email:     "role-filter-fifty@test.com",
+		Password:  "role-filter-fifty",
+		Role:      50,
+		Token:     "role-filter-fifty-token",
+	}
+
+	if _, err := datastore.CreateUser(confDBName, roleZero); err != nil {
+		t.Fatal(err)
+	}
+	roleFiftyID, err := datastore.CreateUser(confDBName, roleFifty)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	users, err := datastore.ListUsers(confDBName, adminAuth.AccountID, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	foundRoleFifty := false
+	for _, user := range users {
+		if user.Role != 50 {
+			t.Fatalf("expected only role 50 users, got role %d for %s", user.Role, user.Email)
+		}
+		if user.ID == roleFiftyID {
+			foundRoleFifty = true
+		}
+	}
+	if !foundRoleFifty {
+		t.Fatal("expected role 50 user in filtered list")
+	}
+}

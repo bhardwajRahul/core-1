@@ -157,7 +157,7 @@ func (mg *Mongo) ListAccounts(dbName string) ([]model.Account, error) {
 	return list, nil
 }
 
-func (mg *Mongo) ListUsers(dbName, accountID string) ([]model.User, error) {
+func (mg *Mongo) ListUsers(dbName, accountID string, role ...int) ([]model.User, error) {
 	db := mg.Client.Database(dbName)
 
 	id, err := primitive.ObjectIDFromHex(accountID)
@@ -166,6 +166,9 @@ func (mg *Mongo) ListUsers(dbName, accountID string) ([]model.User, error) {
 	}
 
 	filter := bson.M{FieldAccountID: id}
+	if len(role) > 0 {
+		filter[FieldRole] = role[0]
+	}
 
 	cur, err := db.Collection("sb_tokens").Find(mg.Ctx, filter)
 	if err != nil {

@@ -68,6 +68,44 @@ func TestUserAddRemoveFromAccount(t *testing.T) {
 	}
 }
 
+func TestListUsersByRole(t *testing.T) {
+	roleEmail := "role-filter-user@test.com"
+	_, roleUser, err := backend.Membership(model.DatabaseConfig{Name: dbName}).CreateUser(testAccountID, roleEmail, userPassword, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = backend.DB.RemoveUser(model.Auth{AccountID: testAccountID, UserID: roleUser.ID, Role: 100}, dbName, roleUser.ID)
+	})
+
+	resp := dbReq(t, acct.addUser, "GET", "/account/users?role=50", nil)
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode > 299 {
+		t.Fatal(GetResponseBody(t, resp))
+	}
+
+	var users []model.User
+	if err := json.NewDecoder(resp.Body).Decode(&users); err != nil {
+		t.Fatal(err)
+	}
+	if len(users) == 0 {
+		t.Fatal("expected at least one user")
+	}
+	for _, user := range users {
+		if user.Role != 50 {
+			t.Fatalf("expected only role 50 users, got role %d for %s", user.Role, user.Email)
+		}
+	}
+
+	resp = dbReq(t, acct.addUser, "GET", "/account/users?role=bad", nil)
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status %d got %d", http.StatusBadRequest, resp.StatusCode)
+	}
+}
+
 func TestAddNewDatabase(t *testing.T) {
 	resp := dbReq(t, acct.addDatabase, "GET", "/account/add-db", nil)
 	defer func() { _ = resp.Body.Close() }()

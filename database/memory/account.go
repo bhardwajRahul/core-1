@@ -102,14 +102,17 @@ func (m *Memory) ListAccounts(dbName string) ([]model.Account, error) {
 	return accounts, nil
 }
 
-func (m *Memory) ListUsers(dbName, accountID string) ([]model.User, error) {
+func (m *Memory) ListUsers(dbName, accountID string, role ...int) ([]model.User, error) {
 	tokens, err := all[model.User](m, dbName, "sb_tokens")
 	if err != nil {
 		return nil, err
 	}
 
 	matches := filter(tokens, func(t model.User) bool {
-		return t.AccountID == accountID
+		if t.AccountID != accountID {
+			return false
+		}
+		return len(role) == 0 || t.Role == role[0]
 	})
 
 	return matches, nil
